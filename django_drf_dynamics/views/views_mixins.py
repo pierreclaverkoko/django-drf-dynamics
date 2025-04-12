@@ -82,7 +82,9 @@ class MultiplePermissionAPIMixin:
         return super().get_permissions()
 
 
-class DrfDynamicsAPIViewMixin(DynamicFormsMixin, DynamicFiltersMixin, MultipleSerializerAPIMixin):
+class DrfDynamicsAPIViewMixin(
+    DynamicFormsMixin, DynamicFiltersMixin, MultipleSerializerAPIMixin, MultiplePermissionAPIMixin
+):
     lookup_serializer_class = ObjectsLookupSerializer
     lookup_mixin_field = None
 
@@ -225,7 +227,5 @@ class ListOverviewAPIViewMixin(MultipleSerializerAPIMixin):
         raise NotImplementedError("Overview sub views must define the method 'get_objects_overview_data'.")
 
 
-class CustomGenericViewset(
-    DBSAPIViewMixin, ListOverviewAPIViewMixin, DrfDynamicsAPIViewMixin, viewsets.GenericViewSet
-):
+class CustomGenericViewset(ListOverviewAPIViewMixin, DrfDynamicsAPIViewMixin, viewsets.GenericViewSet):
     pass

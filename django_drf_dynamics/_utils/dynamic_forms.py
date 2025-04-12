@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 from rest_framework.utils.serializer_helpers import BindingDict, ReturnDict
 
-from cbs.api.fields import AutocompleteRelatedField
+from django_drf_dynamics.serializers.fields import AutocompleteRelatedField
 
 
 class DynamicFormsMixin:
