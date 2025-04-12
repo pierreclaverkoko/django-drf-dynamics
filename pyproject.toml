@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-drf-dynamics"
+version = "0.0.1"
+dependencies = [
+    "django>=4.2",
+    "swapper>=1.4.0",
+]
+description = "A Django app for restframework dynamic components."
+readme = "README.rst"
+requires-python = ">= 3.10"
+authors = [
+    {name = "Pierre-Claver Koko Banywerha", email = "pierreclaverkoko@gmail.com"},
+]
+classifiers = [
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Intended Audience :: Developers",
+    "License :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+
+[project.urls]
+Homepage = "https://github.com/pierreclaverkoko/django-drf-dynamics"
+
+
+[tool.pip-tools]
+generate-hashes = false
+reuse-hashes = false
+
+[tool.black]
+line-length = 119
+target-version = ['py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | blib2to3
+  | tests/data
+  | profiling
+  | static
+  | migrations
+)/
+'''
+
+[tool.flake8]
+ignore = ["E501", "W503", "E203", "E501","W503","F405","E731","C901","B023"]
+max-line-length = 119
+select = ["E", "W"]
+max-complexity = 12
+max-nesting-depth = 12

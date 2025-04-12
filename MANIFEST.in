@@ -1,0 +1,2 @@
+recursive-include django_drf_dynamics/static *
+recursive-include django_drf_dynamics/templates *

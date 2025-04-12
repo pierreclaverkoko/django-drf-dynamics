@@ -1,1 +1,1 @@
-# Django API Dynamics
+# Django DRF Dynamics
