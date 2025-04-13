@@ -1,0 +1,102 @@
+from django.utils.translation import gettext as _
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.serializers import ValidationError
+from rest_framework.utils.serializer_helpers import BindingDict, ReturnDict
+
+from django_drf_dynamics.serializers.fields import AutocompleteRelatedField
+
+
+class DynamicFormsMixin:
+    def get_dynamic_form_fields(self, serializer):
+        """
+        Extracts field information from a serializer and creates a
+        dictionary suitable for building dynamic JSON form fields.
+        """
+        from rest_framework.serializers import Serializer
+
+        serializer_fields = (
+            {**serializer._declared_fields, **serializer.fields}
+            if isinstance(serializer.fields, BindingDict)
+            else serializer._declared_fields
+        )
+
+        form_fields = {}
+        for field_name, field in serializer_fields.items():
+            if field.read_only:
+                continue
+
+            if isinstance(field, Serializer):
+                form_fields[field_name] = self.get_dynamic_form_fields(field)
+            else:
+                field_data = {
+                    "type": field.__class__.__name__.lower(),  # Convert class name to lowercase type
+                    "label": field.label or (field_name.lower().replace("_", " ").capitalize()),
+                    "required": field.required or getattr(field, "allow_null", False),
+                    # Add additional data as needed (e.g., help_text, choices)
+                    "help_text": field.help_text,
+                    "choices": (
+                        field.choices
+                        if not isinstance(field, AutocompleteRelatedField) and hasattr(field, "choices")
+                        else None
+                    ),
+                    "value": (
+                        serializer.data.get(field_name, None) if isinstance(serializer.data, ReturnDict) else None
+                    ),
+                }
+
+                if isinstance(field, AutocompleteRelatedField):
+                    field_data.update(
+                        {
+                            "type": "autocomplete",
+                            "url": field.reverse_url or None,
+                            "value": serializer.data.get("id", None),
+                        }
+                    )
+
+                if getattr(field, "max_length", None):
+                    field_data["max_length"] = field.max_length
+
+                if getattr(field, "max_digits", None):
+                    field_data["max_digits"] = field.max_digits
+
+                if getattr(field, "decimal_places", None):
+                    field_data["decimal_places"] = field.decimal_places
+
+                form_fields[field_name] = field_data
+
+        return form_fields
+
+    @action(detail=False)
+    def object_dynamic_form(self, request):
+        """The object dynamic form action will return a json form format
+        depending on the selected serializer.
+
+        We can select create or update serializer sending the query param ``form_name``.
+        """
+        form_name = self.request.query_params.get("form_name", None)
+        serializer_name = "serializer_class"
+        if form_name:
+            serializer_name = f"{form_name}_{serializer_name}"
+
+        if hasattr(self, serializer_name):
+            form_data = self.get_dynamic_form_fields(getattr(self, serializer_name, self.serializer_class))
+
+            return Response(form_data)
+        else:
+            raise ValidationError(_("Invalid form name"))
+
+    @action(detail=True)
+    def single_object_dynamic_form(self, request, pk=None):
+        form_name = self.request.query_params.get("form_name", None)
+        serializer_name = "serializer_class"
+        if form_name:
+            serializer_name = f"{form_name}_{serializer_name}"
+
+        if hasattr(self, serializer_name):
+            dynamic_serializer_class = getattr(self, serializer_name, self.serializer_class)
+
+            object_ = self.get_object()
+            serializer = dynamic_serializer_class(object_)
+            form_data = self.get_dynamic_form_fields(serializer)
+            return Response(form_data)
