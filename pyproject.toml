@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-drf-dynamics"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
     "django>=4.2",
-    "swapper>=1.4.0",
+    "django-filter>=25.1",
 ]
 description = "A Django app for restframework dynamic components."
 readme = "README.rst"

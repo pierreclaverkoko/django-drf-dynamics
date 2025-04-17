@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class DjangoDrfDynamicsConfig(AppConfig):
+class DrfDynamicsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "django_drf_dynamics"
