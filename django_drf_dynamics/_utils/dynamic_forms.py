@@ -98,7 +98,7 @@ class DynamicFormsMixin:
                     {
                         "type": "autocomplete",
                         "url": field.reverse_url or None,
-                        "value": serializer.data.get("id", None),
+                        # "value": serializer.data.get("id", None),
                     }
                 )
 
