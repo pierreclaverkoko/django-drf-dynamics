@@ -29,6 +29,31 @@ class DynamicFormsMixin:
     ```
     """
 
+    SERIALIZER_FIELD_MAPPING = {
+        "charfield": "text",
+        "decimalfield": "number",
+        "integerfield": "number",
+        "booleanfield": "checkbox",
+        "emailfield": "email",
+        "urlfield": "url",
+        "datetimefield": "datetime",
+        "datefield": "date",
+        "timefield": "time",
+        "choicefield": "select",
+        "multiplechoicefield": "select-multiple",
+        "filefield": "file",
+        "imagefield": "file",
+        "relationfield": "select",
+        "relatedfield": "select",
+        "autocompletefield": "autocomplete",
+        "jsonfield": "json",
+        "listfield": "array",
+        "dictfield": "object",
+        "nestedserializerfield": "object",
+        "nestedlistserializerfield": "array",
+        "nesteddictserializerfield": "object",
+    }
+
     def get_dynamic_form_fields(self, serializer):
         """
         Extract field information from a serializer and create a dictionary
@@ -54,8 +79,10 @@ class DynamicFormsMixin:
             if isinstance(field, Serializer):
                 form_fields[field_name] = self.get_dynamic_form_fields(field)
             else:
+                field_type = field.__class__.__name__.lower()  # Convert class name to lowercase type
                 field_data = {
-                    "type": field.__class__.__name__.lower(),  # Convert class name to lowercase type
+                    "type": field_type,
+                    "html_type": self.SERIALIZER_FIELD_MAPPING.get(field_type, field_type),
                     "label": field.label or (field_name.lower().replace("_", " ").capitalize()),
                     "required": field.required or getattr(field, "allow_null", False),
                     "help_text": field.help_text,
