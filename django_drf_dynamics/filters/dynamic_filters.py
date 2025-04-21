@@ -4,6 +4,30 @@ import django_filters.rest_framework as filters
 
 
 class DrfDynamicFilterBackend(filters.DjangoFilterBackend):
+    """
+    A custom filter backend for dynamically generating filters based on metadata.
+
+    This backend allows you to define filters dynamically using metadata provided
+    in the view's `filterset_metadata` attribute. It supports various filter types
+    such as date, boolean, autocomplete, select, and range filters.
+
+    Example usage:
+
+    ```python
+    class ExampleViewSet(viewsets.ModelViewSet):
+        queryset = ExampleModel.objects.all()
+        filter_backends = [DrfDynamicFilterBackend]
+        filterset_metadata = [
+            {"name": "created_at", "type": "date", "data": {"lookup_expr": "gte"}},
+            {"name": "is_active", "type": "bool"},
+            {"name": "category", "type": "select", "data": {"choices": [(1, "Category 1"), (2, "Category 2")]}},
+        ]
+    ```
+
+    Attributes:
+        TYPE_MAPPING (dict): A mapping of filter types to their corresponding
+            Django Filter classes.
+    """
 
     TYPE_MAPPING = {
         "date": filters.DateFilter,
@@ -15,8 +39,29 @@ class DrfDynamicFilterBackend(filters.DjangoFilterBackend):
     }
 
     def get_filterset_class(self, view, queryset=None):
+        """
+        Dynamically generate a filterset class based on the view's metadata.
+
+        This method creates a `FilterSet` class with filters defined in the
+        `filterset_metadata` attribute of the view. The generated filterset
+        class is then assigned to the view's `filterset_class` attribute.
+
+        Args:
+            view: The view instance that is using this filter backend.
+            queryset: The queryset to be filtered.
+
+        Returns:
+            FilterSet: A dynamically generated filterset class.
+        """
 
         class DynamicFilterSet(filters.FilterSet):
+            """
+            A dynamically generated filterset class.
+
+            This class is created at runtime based on the metadata provided
+            in the view's `filterset_metadata` attribute.
+            """
+
             base_filters = OrderedDict()
 
             class Meta:
@@ -40,8 +85,7 @@ class DrfDynamicFilterBackend(filters.DjangoFilterBackend):
                 choices = metadata["data"].get("choices", [])
                 DynamicFilterSet.base_filters[metadata["name"]] = mapped_field(field_name=field_name, choices=choices)
             else:
-                # We check that the lookup_expr is not None
-                # Because it can be None as done in 'cbs.api._utils.dynamic_filters'
+                # Ensure the lookup expression is not None
                 if lookup_expr:
                     DynamicFilterSet.base_filters[metadata["name"]] = mapped_field(
                         field_name=field_name, lookup_expr=lookup_expr
@@ -49,8 +93,8 @@ class DrfDynamicFilterBackend(filters.DjangoFilterBackend):
                 else:
                     DynamicFilterSet.base_filters[metadata["name"]] = mapped_field(field_name=field_name)
 
-        # We set the dynamic filterset class to the view
+        # Assign the dynamic filterset class to the view
         view.filterset_class = DynamicFilterSet
 
-        # Then we call the super class logics
+        # Call the parent class logic
         return super().get_filterset_class(view, queryset=queryset)

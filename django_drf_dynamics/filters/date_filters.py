@@ -4,24 +4,53 @@ from rest_framework.filters import BaseFilterBackend
 
 
 class DateFilterBackend(BaseFilterBackend):
-    """A filter backend that filters the queryset by date range.
+    """
+    A filter backend that filters the queryset by date range.
 
-    OLD FASHION STYLE :
-    It expects the request to have 'date_from' and 'date_to' query
-    parameters, which are ISO-formatted date strings, such as
-    '2023-11-27'. It also expects the view to have a 'date_field'
-    attribute, which is the name of the model field to filter by, such
-    as 'created_at'. Alternatively, you can send a query_params named
-    'custom_date_field' to be used as date field for queryset.
+    This backend supports two styles of filtering:
 
-    NEW FASHION STYLE :
-    It expects the request to have 'date_ranges' query parameter, which has a list of date rangers members.
-    Each member must contain the field name, the from date and probably the to date.
-    Here is a filter example for 3 date fields
-    Eg : ?date_ranges=created_at__date:2023-01-12:2023-02-23,birthday:1994-09-12:1995-03-25,issue_date:2024-05-01
+    **Old Fashion Style**:
+    - Expects the request to have `date_from` and `date_to` query parameters, which are ISO-formatted date strings (e.g., `2023-11-27`).
+    - The view must have a `date_field` attribute specifying the model field to filter by (e.g., `created_at`).
+    - Alternatively, a `custom_date_field` query parameter can be used to specify the date field.
+
+    **New Fashion Style**:
+    - Expects the request to have a `date_ranges` query parameter, which contains a list of date ranges.
+    - Each range must include the field name, the start date, and optionally the end date.
+    - Example: `?date_ranges=created_at__date:2023-01-12:2023-02-23,birthday:1994-09-12:1995-03-25,issue_date:2024-05-01`.
+
+    Example usage:
+
+    ```python
+    class ExampleViewSet(viewsets.ModelViewSet):
+        queryset = ExampleModel.objects.all()
+        filter_backends = [DateFilterBackend]
+        date_field = "created_at"  # Required for old fashion style
+    ```
+
+    Attributes:
+        None
     """
 
     def filter_queryset(self, request, queryset, view):
+        """
+        Filter the queryset based on the date range provided in the query parameters.
+
+        Args:
+            request: The HTTP request object containing query parameters.
+            queryset: The initial queryset to be filtered.
+            view: The view instance calling this filter backend.
+
+        Returns:
+            QuerySet: The filtered queryset.
+
+        Example query parameters:
+            - Old fashion style: `?date_from=2023-01-01&date_to=2023-12-31`
+            - New fashion style: `?date_ranges=created_at__date:2023-01-12:2023-02-23,birthday:1994-09-12:1995-03-25`
+
+        Raises:
+            ValueError: If the date values cannot be parsed.
+        """
         # Get the date range from the request
         date_from = request.query_params.get("date_from", None)
         date_to = request.query_params.get("date_to", None)
@@ -29,14 +58,13 @@ class DateFilterBackend(BaseFilterBackend):
         # New range field
         date_ranges_all = request.query_params.get("date_ranges", None)
 
-        # DEPRECATED OLD LOGIC : HERE FOR COMPATIBILITY
+        # DEPRECATED OLD LOGIC: HERE FOR COMPATIBILITY
         if date_from:
             # Get the date field from the view
             date_field = getattr(view, "date_field", custom_date_field)
 
             # Validate the inputs
             if not date_field:
-                # raise AttributeError("The view must have a date_field attribute.")
                 date_field = "created_at__date"
 
             # Convert the date strings to date objects
@@ -86,7 +114,7 @@ class DateFilterBackend(BaseFilterBackend):
                 date_low = date_list[0]
                 date_high = date_list[1]
 
-                # Convert the value to Decimal objects
+                # Convert the value to date objects
                 try:
                     date_low = timezone.datetime.fromisoformat(date_low).date()
                     if date_high:

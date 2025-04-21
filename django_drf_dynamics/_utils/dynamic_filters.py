@@ -6,8 +6,53 @@ from rest_framework.response import Response
 
 
 class DynamicFiltersMixin:
+    """
+    A mixin to dynamically generate filter metadata for API views.
+
+    This mixin provides utility methods to define various types of filters,
+    such as select, autocomplete, boolean, date, datetime, range, and form value filters.
+    It also includes an action to return filtering metadata for use in frontend
+    applications.
+
+    Example usage:
+
+    ```python
+    class AccountViewSet(viewsets.ModelViewSet, DynamicFiltersMixin):
+        queryset = Account.objects.all()
+        filterset_metadata = [
+            DynamicFiltersMixin.filter_autocomplete(
+                title=_("Client category"),
+                name="client_category",
+                url="v1:api:clients:clientcategory-objects-autocomplete",
+            ),
+            DynamicFiltersMixin.filter_select(
+                title=_("Sex"),
+                name="individual__sex",
+                choices_class=IndividualClientProfile.SexChoice,
+            ),
+            DynamicFiltersMixin.filter_bool(title=_("Is secret client?"), name="client_is_secret"),
+            DynamicFiltersMixin.filter_date(title=_("Creation date"), name="created_at"),
+            DynamicFiltersMixin.filter_datetime(title=_("Last updated"), name="updated_at"),
+        ]
+    ```
+    """
+
     @classmethod
     def filter_select(cls, title, name, choices_class, is_multiple=False, lookup_expr=None):
+        """
+        Create metadata for a select or multiple select filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the filter field.
+            choices_class (Choices): A class containing the choices for the filter.
+                Must be a subclass of `models.TextChoices` or `models.IntegerChoices`.
+            is_multiple (bool, optional): Whether the filter allows multiple selections. Defaults to False.
+            lookup_expr (str, optional): The lookup expression for the filter. Defaults to None.
+
+        Returns:
+            dict: Metadata for the select filter.
+        """
         return {
             "title": title,
             "name": name,
@@ -17,6 +62,17 @@ class DynamicFiltersMixin:
 
     @classmethod
     def filter_autocomplete(cls, title, name, url):
+        """
+        Create metadata for an autocomplete filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the filter field.
+            url (str): The URL for the autocomplete endpoint.
+
+        Returns:
+            dict: Metadata for the autocomplete filter.
+        """
         return {
             "title": title,
             "name": name,
@@ -26,30 +82,69 @@ class DynamicFiltersMixin:
 
     @classmethod
     def filter_client(cls, title=None, name=None):
+        """
+        Create metadata for a client autocomplete filter.
+
+        Args:
+            title (str, optional): The display title of the filter. Defaults to "Client".
+            name (str, optional): The name of the filter field. Defaults to "client".
+
+        Returns:
+            dict: Metadata for the client autocomplete filter.
+        """
         if not title:
             title = _("Client")
-
         if not name:
             name = "client"
-
         return cls.filter_autocomplete(title=title, name=name, url="v1:api:clients:bankclient-objects-autocomplete")
 
     @classmethod
     def filter_client_account(cls, title=None, name=None):
+        """
+        Create metadata for a client account autocomplete filter.
+
+        Args:
+            title (str, optional): The display title of the filter. Defaults to "Account".
+            name (str, optional): The name of the filter field. Defaults to "account".
+
+        Returns:
+            dict: Metadata for the client account autocomplete filter.
+        """
         if not title:
             title = _("Account")
-
         if not name:
             name = "account"
-
         return cls.filter_autocomplete(title=title, name=name, url="v1:api:clients:bankaccount-objects-autocomplete")
 
     @classmethod
     def filter_bool(cls, title, name, lookup_expr=None):
+        """
+        Create metadata for a boolean filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the filter field.
+            lookup_expr (str, optional): The lookup expression for the filter. Defaults to None.
+
+        Returns:
+            dict: Metadata for the boolean filter.
+        """
         return {"title": title, "name": name, "type": "bool", "data": {"lookup_expr": lookup_expr}}
 
     @classmethod
     def filter_form_value(cls, title, name, field_type=None, lookup_expr=None):
+        """
+        Create metadata for a form value filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the filter field.
+            field_type (str, optional): The type of the form field (e.g., "text"). Defaults to "text".
+            lookup_expr (str, optional): The lookup expression for the filter. Defaults to None.
+
+        Returns:
+            dict: Metadata for the form value filter.
+        """
         if not field_type:
             field_type = "text"
         return {
@@ -61,6 +156,20 @@ class DynamicFiltersMixin:
 
     @classmethod
     def filter_range(cls, title, name, min_=None, max_=None, step=None, lookup_expr=None):
+        """
+        Create metadata for a range filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the filter field.
+            min_ (int, optional): The minimum value for the range. Defaults to None.
+            max_ (int, optional): The maximum value for the range. Defaults to None.
+            step (int, optional): The step value for the range. Defaults to 1.
+            lookup_expr (str, optional): The lookup expression for the filter. Defaults to None.
+
+        Returns:
+            dict: Metadata for the range filter.
+        """
         if not step:
             step = 1
         return {
@@ -71,93 +180,79 @@ class DynamicFiltersMixin:
         }
 
     @classmethod
-    def filter_datetime_date(cls, title, name, lookup_expr=None):
+    def filter_date(cls, title, name, lookup_expr=None):
+        """
+        Create metadata for a date filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the filter field.
+            lookup_expr (str, optional): The lookup expression for the filter. Defaults to None.
+
+        Returns:
+            dict: Metadata for the date filter.
+        """
         return {"title": title, "name": name, "type": "date", "data": {"field_name": name, "lookup_expr": lookup_expr}}
 
     @classmethod
-    def filter_date(cls, title, name, lookup_expr=None):
-        return {"title": title, "name": name, "type": "date", "data": {"field_name": name, "lookup_expr": lookup_expr}}
+    def filter_datetime(cls, title, name, lookup_expr=None):
+        """
+        Create metadata for a datetime filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the filter field.
+            lookup_expr (str, optional): The lookup expression for the filter. Defaults to None.
+
+        Returns:
+            dict: Metadata for the datetime filter.
+        """
+        return {
+            "title": title,
+            "name": name,
+            "type": "datetime",
+            "data": {"field_name": name, "lookup_expr": lookup_expr},
+        }
 
     @classmethod
     def build_select_choices(cls, select_choices):
+        """
+        Build a list of choices for a select filter.
+
+        Args:
+            select_choices (Choices): A class containing the choices.
+                Must be a subclass of `models.TextChoices` or `models.IntegerChoices`.
+
+        Returns:
+            list: A list of dictionaries with "title" and "value" keys.
+        """
         choices = [{"title": "All", "value": "", "selected": True}]
         for choice in select_choices:
             choices.append({"title": choice.name, "value": choice.value})
-
         return choices
 
     @action(detail=False)
     def objects_filtering_data(self, request):
         """
-        Objects filtering data action returns the filters and ordering
-        columns data for a given list in a viewset. We must inherit
-        ``LookupModelAPIViewMixin`` class in our viewset and configure
-        *filterset_metadata*. The filterset_metadata must contain a list of
-        dictionaries containing *title*, *name*, *type*, *data*, *range*.
+        Return filtering metadata for the viewset.
 
-        :var title: must contain the readable title of the filter
-        :var name: must contain the filter name that will contain value in the request to backend
-        :var type: the filter type (bool, autocomplete, select, date, form_value) to help frontend to render the filter
-        :var data: the data dictionary depending on the filter type
+        This action generates and returns metadata for filters and ordering
+        fields defined in the viewset's [filterset_metadata](http://_vscodecontentref_/1) attribute.
 
-        The *bool* and *date* type will contain no data.
-        The *autocomplete* type will contain the object related autocomplete link {"url": "/the_autocomplete_url/"}
-        The *select* type must contain choices as list of title-value dictionnary {"choices": [{"title": "Status1", "value": "S1"}]}
-        The *select_multiple* type must contain choices as list of title-value dictionnary {"choices": [{"title": "Status1", "value": "S1"}]}
-        The *form_value* type can contain field_type.
-        The *range* type must contain min and max {"min": 0, "max": 100}
+        Args:
+            request: The HTTP request object.
 
-        NB: For select, you can use the function *LookupModelAPIViewMixin.build_select_choices* to build object from a models.TextChoices or models.IntegerChoices instance.
-        For 'autocomplete' type, use `./manage.py show_urls` with grep to see urls for a specific api and take its url_name. eg: `./manage.py show_urls | grep "clients/list/all"`
+        Returns:
+            Response: A JSON response containing filtering metadata.
 
-        .. hint::
-            Example :
-
-            class AccountViewSet():
-                queryset = Account.objects.all()
-                filterset_metadata = [
-                    LookupModelAPIViewMixin.filter_autocomplete(
-                        title=_("Client category"),
-                        name="client_category",
-                        url="v1:api:clients:clientcategory-objects-autocomplete",
-                    ),
-                    LookupModelAPIViewMixin.filter_autocomplete(
-                        title=_("Client type"),
-                        name="client_category_type",
-                        url="v1:api:clients:clientcategorytype-objects-autocomplete",
-                    ),
-                    LookupModelAPIViewMixin.filter_autocomplete(
-                        title=_("Activity Sector"),
-                        name="activity_sector",
-                        url="v1:api:clients:activitysector-objects-autocomplete",
-                    ),
-                    LookupModelAPIViewMixin.filter_client(title=_("Creation client"), name="creation_client"),
-                    LookupModelAPIViewMixin.filter_select(
-                        title=_("Sex"), name="individual__sex", choices_class=IndividualClientProfile.SexChoice
-                    ),
-                    LookupModelAPIViewMixin.filter_select(
-                        title=_("Marital status"),
-                        name="individual__marital_status",
-                        choices_class=IndividualClientProfile.MaritalStatusChoice,
-                    ),
-                    LookupModelAPIViewMixin.filter_bool(title=_("Is secret client ?"), name="client_is_secret"),
-                    LookupModelAPIViewMixin.filter_form_value(title=_("Client id"), name="client_id"),
-                    LookupModelAPIViewMixin.filter_select(
-                        title=_("Prefered language"),
-                        name="prefered_language",
-                        choices_class=BankClient.ClientLanguages,
-                    ),
-                ]
-
-        .. warning::
-            This configuration will conflict with filterset_fields configuration and custom filter configurations.
-            Please be carefull using both of them.
+        Raises:
+            ImproperlyConfigured: If [filterset_metadata](http://_vscodecontentref_/2) is not properly configured.
         """
         filterset_metadata = getattr(self, "filterset_metadata", None)
         if not filterset_metadata:
             filterset_metadata = []
 
-            # We populate filterset fields if filterset_metadata is empty
+            # Populate filterset fields if filterset_metadata is empty
             filterset_fields = getattr(self, "filterset_fields", [])
             for filter_key in filterset_fields:
                 filterset_metadata.append(
@@ -169,14 +264,13 @@ class DynamicFiltersMixin:
                     }
                 )
 
-        # We add the created_at filter
-        date_filter_details = self.filter_datetime_date(title=_("Creation date"), name="created_at")
-
+        # Add the created_at filter
+        date_filter_details = self.filter_date(title=_("Creation date"), name="created_at")
         if date_filter_details not in filterset_metadata:
             filterset_metadata.append(date_filter_details)
 
         if not isinstance(filterset_metadata, (list, tuple)):
-            return ImproperlyConfigured(_("Wrong configuration. 'filterset_metadata' must be a dictionnary."))
+            raise ImproperlyConfigured(_("Wrong configuration. 'filterset_metadata' must be a dictionary."))
 
         filtering_data = {
             "filters": filterset_metadata,
