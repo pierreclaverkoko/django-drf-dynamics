@@ -46,6 +46,7 @@ class DynamicFormsMixin:
         "relationfield": "select",
         "relatedfield": "select",
         "autocompletefield": "autocomplete",
+        "primarykeyrelatedfield": "autocomplete",
         "jsonfield": "json",
         "listfield": "array",
         "dictfield": "object",
@@ -89,6 +90,7 @@ class DynamicFormsMixin:
                     else None
                 ),
                 "value": (serializer.data.get(field_name, None) if isinstance(serializer.data, ReturnDict) else None),
+                "accept_multiple_entries": False,
             }
 
             if isinstance(field, AutocompleteRelatedField):
@@ -112,23 +114,27 @@ class DynamicFormsMixin:
             # MULTIPLE FIELDS MANAGEMENT
             if isinstance(field, Serializer):
                 field_data["fields"] = self.get_dynamic_form_fields(field)
-            if isinstance(field, list):
+                field_data["type"] = "serializerfield"
+                field_data["html_type"] = "object"
+
+                # MANY MANAGEMENT
+                if hasattr(field, "many") and field.many:
+                    field_data["accept_multiple_entries"] = True
+
+                # CHILDREN MANAGEMENT
+                if hasattr(field, "child") and field.child:
+                    field_data["fields"] = self.get_dynamic_form_fields(field.child)
+                elif hasattr(field, "child_relation") and field.child_relation:
+                    field_data["fields"] = self.get_dynamic_form_fields(field.child_relation)
+            elif isinstance(field, list):
                 field_data["fields"] = [
                     self.get_dynamic_form_fields(item) if isinstance(item, Serializer) else item for item in field
                 ]
-            if isinstance(field, dict):
+            elif isinstance(field, dict):
                 field_data["fields"] = {
                     key: self.get_dynamic_form_fields(value) if isinstance(value, Serializer) else value
                     for key, value in field.items()
                 }
-            if isinstance(field, Serializer) and hasattr(field, "many") and field.many:
-                field_data["fields"] = [
-                    self.get_dynamic_form_fields(item) if isinstance(item, Serializer) else item for item in field
-                ]
-            if isinstance(field, Serializer) and hasattr(field, "child") and field.child:
-                field_data["fields"] = self.get_dynamic_form_fields(field.child)
-            if isinstance(field, Serializer) and hasattr(field, "child_relation") and field.child_relation:
-                field_data["fields"] = self.get_dynamic_form_fields(field.child_relation)
 
             form_fields[field_name] = field_data
 
