@@ -1,20 +1,70 @@
 from django.utils.translation import gettext as _
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.serializers import ValidationError
+from rest_framework.serializers import ValidationError, Serializer
 from rest_framework.utils.serializer_helpers import BindingDict, ReturnDict
 
 from django_drf_dynamics.serializers.fields import AutocompleteRelatedField
 
 
 class DynamicFormsMixin:
+    """
+    A mixin to dynamically generate JSON form fields based on serializer definitions.
+
+    This mixin provides methods to extract field information from serializers
+    and return it in a format suitable for building dynamic forms. It supports
+    nested serializers, autocomplete fields, and additional metadata like
+    help text, choices, and validation constraints.
+
+    Example usage:
+
+    ```python
+    class ExampleViewSet(viewsets.ModelViewSet, DynamicFormsMixin):
+        queryset = ExampleModel.objects.all()
+        serializer_class = ExampleSerializer
+
+        @action(detail=False)
+        def object_dynamic_form(self, request):
+            return super().object_dynamic_form(request)
+    ```
+    """
+
+    SERIALIZER_FIELD_MAPPING = {
+        "charfield": "text",
+        "decimalfield": "number",
+        "integerfield": "number",
+        "booleanfield": "checkbox",
+        "emailfield": "email",
+        "urlfield": "url",
+        "datetimefield": "datetime",
+        "datefield": "date",
+        "timefield": "time",
+        "choicefield": "select",
+        "multiplechoicefield": "select-multiple",
+        "filefield": "file",
+        "imagefield": "file",
+        "relationfield": "select",
+        "relatedfield": "select",
+        "autocompletefield": "autocomplete",
+        "jsonfield": "json",
+        "listfield": "array",
+        "dictfield": "object",
+        "nestedserializerfield": "object",
+        "nestedlistserializerfield": "array",
+        "nesteddictserializerfield": "object",
+    }
+
     def get_dynamic_form_fields(self, serializer):
         """
-        Extracts field information from a serializer and creates a
-        dictionary suitable for building dynamic JSON form fields.
-        """
-        from rest_framework.serializers import Serializer
+        Extract field information from a serializer and create a dictionary
+        suitable for building dynamic JSON form fields.
 
+        Args:
+            serializer (Serializer): The serializer instance to extract fields from.
+
+        Returns:
+            dict: A dictionary containing field metadata for dynamic form generation.
+        """
         serializer_fields = (
             {**serializer._declared_fields, **serializer.fields}
             if isinstance(serializer.fields, BindingDict)
@@ -26,53 +76,81 @@ class DynamicFormsMixin:
             if field.read_only:
                 continue
 
+            field_type = field.__class__.__name__.lower()  # Convert class name to lowercase type
+            field_data = {
+                "type": field_type,
+                "html_type": self.SERIALIZER_FIELD_MAPPING.get(field_type, field_type),
+                "label": field.label or (field_name.lower().replace("_", " ").capitalize()),
+                "required": field.required or getattr(field, "allow_null", False),
+                "help_text": field.help_text,
+                "choices": (
+                    field.choices
+                    if not isinstance(field, AutocompleteRelatedField) and hasattr(field, "choices")
+                    else None
+                ),
+                "value": (serializer.data.get(field_name, None) if isinstance(serializer.data, ReturnDict) else None),
+            }
+
+            if isinstance(field, AutocompleteRelatedField):
+                field_data.update(
+                    {
+                        "type": "autocomplete",
+                        "url": field.reverse_url or None,
+                        "value": serializer.data.get("id", None),
+                    }
+                )
+
+            if getattr(field, "max_length", None):
+                field_data["max_length"] = field.max_length
+
+            if getattr(field, "max_digits", None):
+                field_data["max_digits"] = field.max_digits
+
+            if getattr(field, "decimal_places", None):
+                field_data["decimal_places"] = field.decimal_places
+
+            # MULTIPLE FIELDS MANAGEMENT
             if isinstance(field, Serializer):
-                form_fields[field_name] = self.get_dynamic_form_fields(field)
-            else:
-                field_data = {
-                    "type": field.__class__.__name__.lower(),  # Convert class name to lowercase type
-                    "label": field.label or (field_name.lower().replace("_", " ").capitalize()),
-                    "required": field.required or getattr(field, "allow_null", False),
-                    # Add additional data as needed (e.g., help_text, choices)
-                    "help_text": field.help_text,
-                    "choices": (
-                        field.choices
-                        if not isinstance(field, AutocompleteRelatedField) and hasattr(field, "choices")
-                        else None
-                    ),
-                    "value": (
-                        serializer.data.get(field_name, None) if isinstance(serializer.data, ReturnDict) else None
-                    ),
+                field_data["fields"] = self.get_dynamic_form_fields(field)
+            if isinstance(field, list):
+                field_data["fields"] = [
+                    self.get_dynamic_form_fields(item) if isinstance(item, Serializer) else item for item in field
+                ]
+            if isinstance(field, dict):
+                field_data["fields"] = {
+                    key: self.get_dynamic_form_fields(value) if isinstance(value, Serializer) else value
+                    for key, value in field.items()
                 }
+            if isinstance(field, Serializer) and hasattr(field, "many") and field.many:
+                field_data["fields"] = [
+                    self.get_dynamic_form_fields(item) if isinstance(item, Serializer) else item for item in field
+                ]
+            if isinstance(field, Serializer) and hasattr(field, "child") and field.child:
+                field_data["fields"] = self.get_dynamic_form_fields(field.child)
+            if isinstance(field, Serializer) and hasattr(field, "child_relation") and field.child_relation:
+                field_data["fields"] = self.get_dynamic_form_fields(field.child_relation)
 
-                if isinstance(field, AutocompleteRelatedField):
-                    field_data.update(
-                        {
-                            "type": "autocomplete",
-                            "url": field.reverse_url or None,
-                            "value": serializer.data.get("id", None),
-                        }
-                    )
-
-                if getattr(field, "max_length", None):
-                    field_data["max_length"] = field.max_length
-
-                if getattr(field, "max_digits", None):
-                    field_data["max_digits"] = field.max_digits
-
-                if getattr(field, "decimal_places", None):
-                    field_data["decimal_places"] = field.decimal_places
-
-                form_fields[field_name] = field_data
+            form_fields[field_name] = field_data
 
         return form_fields
 
     @action(detail=False)
     def object_dynamic_form(self, request):
-        """The object dynamic form action will return a json form format
-        depending on the selected serializer.
+        """
+        Generate a dynamic JSON form based on the selected serializer.
 
-        We can select create or update serializer sending the query param ``form_name``.
+        This method returns a JSON representation of a form based on the
+        serializer specified by the `form_name` query parameter. If no
+        `form_name` is provided, the default serializer is used.
+
+        Args:
+            request: The HTTP request object.
+
+        Returns:
+            Response: A JSON response containing the form fields.
+
+        Raises:
+            ValidationError: If the specified `form_name` is invalid.
         """
         form_name = self.request.query_params.get("form_name", None)
         serializer_name = "serializer_class"
@@ -81,13 +159,26 @@ class DynamicFormsMixin:
 
         if hasattr(self, serializer_name):
             form_data = self.get_dynamic_form_fields(getattr(self, serializer_name, self.serializer_class))
-
             return Response(form_data)
         else:
             raise ValidationError(_("Invalid form name"))
 
     @action(detail=True)
     def single_object_dynamic_form(self, request, pk=None):
+        """
+        Generate a dynamic JSON form for a single object based on the selected serializer.
+
+        This method returns a JSON representation of a form for a specific object
+        identified by its primary key (`pk`). The serializer is determined by the
+        `form_name` query parameter or defaults to the view's serializer.
+
+        Args:
+            request: The HTTP request object.
+            pk: The primary key of the object.
+
+        Returns:
+            Response: A JSON response containing the form fields.
+        """
         form_name = self.request.query_params.get("form_name", None)
         serializer_name = "serializer_class"
         if form_name:

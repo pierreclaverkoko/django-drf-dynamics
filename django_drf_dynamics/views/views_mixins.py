@@ -21,6 +21,17 @@ logger = logging.getLogger(__name__)
 
 
 class MultipleSerializerAPIMixin:
+    """
+    A mixin to handle multiple serializers for different actions in a viewset.
+
+    Attributes:
+        serializer_class: Default serializer class.
+        detail_serializer_class: Serializer class for detail views.
+        create_serializer_class: Serializer class for create actions.
+        update_serializer_class: Serializer class for update actions.
+        list_serializer_class: Serializer class for list actions.
+    """
+
     serializer_class = None
     detail_serializer_class = None
     create_serializer_class = None
@@ -28,6 +39,12 @@ class MultipleSerializerAPIMixin:
     list_serializer_class = None
 
     def get_serializer_class(self):
+        """
+        Determine the appropriate serializer class based on the action.
+
+        Returns:
+            Serializer class to be used for the current action.
+        """
         if not hasattr(self, "action"):
             return super().get_serializer_class()
 
@@ -51,6 +68,17 @@ class MultipleSerializerAPIMixin:
 
 
 class MultiplePermissionAPIMixin:
+    """
+    A mixin to handle multiple permission classes for different actions in a viewset.
+
+    Attributes:
+        permission_classes: Default permission classes.
+        detail_permission_classes: Permission classes for detail views.
+        create_permission_classes: Permission classes for create actions.
+        update_permission_classes: Permission classes for update actions.
+        list_permission_classes: Permission classes for list actions.
+    """
+
     permission_classes = None
     detail_permission_classes = None
     create_permission_classes = None
@@ -58,6 +86,12 @@ class MultiplePermissionAPIMixin:
     list_permission_classes = None
 
     def get_permissions(self):
+        """
+        Determine the appropriate permission classes based on the action.
+
+        Returns:
+            List of permission instances for the current action.
+        """
         if not self.permission_classes:
             self.permission_classes = []
 
@@ -85,6 +119,16 @@ class MultiplePermissionAPIMixin:
 class DrfDynamicsAPIViewMixin(
     DynamicFormsMixin, DynamicFiltersMixin, MultipleSerializerAPIMixin, MultiplePermissionAPIMixin
 ):
+    """
+    A mixin to provide dynamic forms, filters, serializers, and permissions for API views.
+
+    Attributes:
+        lookup_serializer_class: Serializer class for lookup operations.
+        lookup_mixin_field: Field(s) used for lookup operations.
+        ordering_fields: Fields available for ordering.
+        filterset_metadata: Metadata for filters.
+    """
+
     lookup_serializer_class = ObjectsLookupSerializer
     lookup_mixin_field = None
 
@@ -92,12 +136,31 @@ class DrfDynamicsAPIViewMixin(
     filterset_metadata = []
 
     def get_lookup_serializer_class(self):
+        """
+        Get the serializer class for lookup operations.
+
+        Returns:
+            Serializer class for lookup operations.
+
+        Raises:
+            ImproperlyConfigured: If `lookup_serializer_class` is not defined.
+        """
         if not self.lookup_serializer_class:
             raise ImproperlyConfigured(_("'LookupModelAPIViewMixin' requires 'lookup_serializer_class' attribute"))
 
         return self.lookup_serializer_class
 
     def get_lookup_serializer(self, data, many=False):
+        """
+        Get an instance of the lookup serializer.
+
+        Args:
+            data: Data to be serialized.
+            many (bool): Whether the data contains multiple objects.
+
+        Returns:
+            An instance of the lookup serializer.
+        """
         serializer_class = self.get_lookup_serializer_class()
         context = self.get_serializer_context()
         context["request"] = self.request
@@ -105,6 +168,15 @@ class DrfDynamicsAPIViewMixin(
 
     @action(detail=False)
     def objects_autocomplete(self, request):
+        """
+        Provide autocomplete functionality for objects.
+
+        Args:
+            request: The HTTP request object.
+
+        Returns:
+            Response: A paginated or non-paginated response containing serialized data.
+        """
         queryset = self.filter_queryset(self.get_queryset())
 
         page = self.paginate_queryset(queryset)
@@ -117,6 +189,19 @@ class DrfDynamicsAPIViewMixin(
 
     @action(detail=False)
     def object_lookup(self, request):
+        """
+        Perform a lookup operation on the queryset based on the provided lookup data.
+
+        Args:
+            request: The HTTP request object.
+
+        Returns:
+            Response: A paginated or non-paginated response containing serialized data.
+
+        Raises:
+            ImproperlyConfigured: If required attributes or parameters are missing.
+            NotFound: If the lookup results in multiple objects.
+        """
         queryset = self.filter_queryset(self.get_queryset())
         lookup_data = self.request.query_params.get("lookup_data", None)
 
@@ -176,9 +261,17 @@ class DrfDynamicsAPIViewMixin(
         return Response(serializer.data)
 
     def validate_lookup_data(self, value: str | int) -> (bool, str | int, str):
-        """Override this to validate lookup data.
+        """
+        Validate the lookup data provided by the user.
 
-        This will raise
+        Args:
+            value (str | int): The lookup data to validate.
+
+        Returns:
+            tuple: A tuple containing:
+                - bool: Whether the lookup data is valid.
+                - str | int: The validated lookup data.
+                - str: A message indicating the validation result.
         """
         message = _("Lookup data validated")
         try:
@@ -190,12 +283,26 @@ class DrfDynamicsAPIViewMixin(
 
 
 class ListOverviewAPIViewMixin(MultipleSerializerAPIMixin):
+    """
+    A mixin to provide an overview of objects in a list view.
+
+    Attributes:
+        OVERVIEW_LIST_LENGTH: Maximum length of the overview list.
+    """
+
     OVERVIEW_LIST_LENGTH = 4
 
     class OverviewType:
-        class Data:
-            DEFAULT_CURRENCY_CODE = "BIF"
+        """
+        A nested class to define types and constants for overview data.
+        """
 
+        class Data:
+            """
+            A nested class to define constants for data representation.
+            """
+
+            DEFAULT_CURRENCY_CODE = "BIF"
             TAG_PRIMARY, TAG_INFO, TAG_SECONDARY, TAG_WARNING, TAG_SUCCESS, TAG_DANGER = (
                 "primary",
                 "info",
@@ -213,6 +320,18 @@ class ListOverviewAPIViewMixin(MultipleSerializerAPIMixin):
 
     @action(detail=False)
     def objects_overview(self, request):
+        """
+        Provide an overview of objects.
+
+        Args:
+            request: The HTTP request object.
+
+        Returns:
+            Response: A response containing the overview data.
+
+        Raises:
+            RuntimeError: If the overview data is not a list or exceeds the maximum length.
+        """
         overview_list = self.get_objects_overview_data()
 
         if not isinstance(overview_list, list):
@@ -224,8 +343,21 @@ class ListOverviewAPIViewMixin(MultipleSerializerAPIMixin):
         return Response(overview_list)
 
     def get_objects_overview_data(self):
+        """
+        Get the data for the objects overview.
+
+        Returns:
+            list: A list of overview data.
+
+        Raises:
+            NotImplementedError: If the method is not implemented in a subclass.
+        """
         raise NotImplementedError("Overview sub views must define the method 'get_objects_overview_data'.")
 
 
 class CustomGenericViewset(ListOverviewAPIViewMixin, DrfDynamicsAPIViewMixin, viewsets.GenericViewSet):
+    """
+    A custom generic viewset combining multiple mixins for dynamic API functionality.
+    """
+
     pass

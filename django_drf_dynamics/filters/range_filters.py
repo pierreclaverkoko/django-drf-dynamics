@@ -5,17 +5,47 @@ from rest_framework.filters import BaseFilterBackend
 
 
 class AmountFilterBackend(BaseFilterBackend):
-    """A filter backend that filters the queryset by amount range.
+    """
+    A filter backend that filters the queryset by amount range.
 
-    Here is an example of filter :
-    eg: trans_amount:34000-450000,trans_commissions:23000-4599999
-    Every range definition has two members separated by ":".
-    The first member contains the field to be queried and the second
-    member contains the range definition.
-    We can then send many ranges.
+    This filter backend allows filtering querysets based on multiple amount ranges
+    provided in the query parameters. Each range is defined as a field name followed
+    by a colon and a range definition (e.g., `field_name:min-max`). Multiple ranges
+    can be separated by commas.
+
+    Example usage:
+
+    ```python
+    # Query parameter example:
+    # ?amount_ranges=trans_amount:34000-450000,trans_commissions:23000-4599999
+
+    class ExampleViewSet(viewsets.ModelViewSet):
+        queryset = Transaction.objects.all()
+        filter_backends = [AmountFilterBackend]
+    ```
+
+    Attributes:
+        None
     """
 
     def filter_queryset(self, request, queryset, view):
+        """
+        Filter the queryset based on the amount ranges provided in the query parameters.
+
+        Args:
+            request: The HTTP request object containing query parameters.
+            queryset: The initial queryset to be filtered.
+            view: The view instance calling this filter backend.
+
+        Returns:
+            QuerySet: The filtered queryset.
+
+        Example query parameter:
+            ?amount_ranges=trans_amount:34000-450000,trans_commissions:23000-4599999
+
+        Raises:
+            ValueError: If the range values cannot be converted to decimals.
+        """
         # Get the amount range from the request
         # eg: trans_amount:34000-450000,trans_commissions:23000-4599999
         amount_ranges_all = request.query_params.get("amount_ranges", None)
@@ -39,9 +69,9 @@ class AmountFilterBackend(BaseFilterBackend):
                 # We don't use the empty or excessive range
                 continue
 
-            # We will use None to exclude le higher comparison
+            # We will use None to exclude the higher comparison
             if amount_range_element_split_len == 1:
-                amount_range_element_split[1] = None
+                amount_range_element_split.append(None)
 
             amount_ranges_dict[amount_range_elements[0].strip()] = amount_range_element_split
 
