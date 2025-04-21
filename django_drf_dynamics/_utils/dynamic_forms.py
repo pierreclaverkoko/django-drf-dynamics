@@ -2,7 +2,7 @@ from django.utils.translation import gettext as _
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError, Serializer
-from rest_framework.utils.serializer_helpers import BindingDict, ReturnDict
+from rest_framework.utils.serializer_helpers import ReturnDict  # BindingDict,
 
 from django_drf_dynamics.serializers.fields import AutocompleteRelatedField
 
@@ -66,11 +66,17 @@ class DynamicFormsMixin:
         Returns:
             dict: A dictionary containing field metadata for dynamic form generation.
         """
-        serializer_fields = (
-            {**serializer._declared_fields, **serializer.fields}
-            if isinstance(serializer.fields, BindingDict)
-            else serializer._declared_fields
-        )
+        # serializer_fields = (
+        #     {**serializer._declared_fields, **serializer.fields}
+        #     if isinstance(serializer.fields, BindingDict)
+        #     else serializer._declared_fields
+        # )
+
+        try:
+            serializer_fields = serializer().fields
+            serializer = serializer()
+        except TypeError:
+            serializer_fields = serializer.fields
 
         form_fields = {}
         for field_name, field in serializer_fields.items():
