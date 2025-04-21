@@ -76,45 +76,61 @@ class DynamicFormsMixin:
             if field.read_only:
                 continue
 
+            field_type = field.__class__.__name__.lower()  # Convert class name to lowercase type
+            field_data = {
+                "type": field_type,
+                "html_type": self.SERIALIZER_FIELD_MAPPING.get(field_type, field_type),
+                "label": field.label or (field_name.lower().replace("_", " ").capitalize()),
+                "required": field.required or getattr(field, "allow_null", False),
+                "help_text": field.help_text,
+                "choices": (
+                    field.choices
+                    if not isinstance(field, AutocompleteRelatedField) and hasattr(field, "choices")
+                    else None
+                ),
+                "value": (serializer.data.get(field_name, None) if isinstance(serializer.data, ReturnDict) else None),
+            }
+
+            if isinstance(field, AutocompleteRelatedField):
+                field_data.update(
+                    {
+                        "type": "autocomplete",
+                        "url": field.reverse_url or None,
+                        "value": serializer.data.get("id", None),
+                    }
+                )
+
+            if getattr(field, "max_length", None):
+                field_data["max_length"] = field.max_length
+
+            if getattr(field, "max_digits", None):
+                field_data["max_digits"] = field.max_digits
+
+            if getattr(field, "decimal_places", None):
+                field_data["decimal_places"] = field.decimal_places
+
+            # MULTIPLE FIELDS MANAGEMENT
             if isinstance(field, Serializer):
-                form_fields[field_name] = self.get_dynamic_form_fields(field)
-            else:
-                field_type = field.__class__.__name__.lower()  # Convert class name to lowercase type
-                field_data = {
-                    "type": field_type,
-                    "html_type": self.SERIALIZER_FIELD_MAPPING.get(field_type, field_type),
-                    "label": field.label or (field_name.lower().replace("_", " ").capitalize()),
-                    "required": field.required or getattr(field, "allow_null", False),
-                    "help_text": field.help_text,
-                    "choices": (
-                        field.choices
-                        if not isinstance(field, AutocompleteRelatedField) and hasattr(field, "choices")
-                        else None
-                    ),
-                    "value": (
-                        serializer.data.get(field_name, None) if isinstance(serializer.data, ReturnDict) else None
-                    ),
+                field_data["fields"] = self.get_dynamic_form_fields(field)
+            if isinstance(field, list):
+                field_data["fields"] = [
+                    self.get_dynamic_form_fields(item) if isinstance(item, Serializer) else item for item in field
+                ]
+            if isinstance(field, dict):
+                field_data["fields"] = {
+                    key: self.get_dynamic_form_fields(value) if isinstance(value, Serializer) else value
+                    for key, value in field.items()
                 }
+            if isinstance(field, Serializer) and hasattr(field, "many") and field.many:
+                field_data["fields"] = [
+                    self.get_dynamic_form_fields(item) if isinstance(item, Serializer) else item for item in field
+                ]
+            if isinstance(field, Serializer) and hasattr(field, "child") and field.child:
+                field_data["fields"] = self.get_dynamic_form_fields(field.child)
+            if isinstance(field, Serializer) and hasattr(field, "child_relation") and field.child_relation:
+                field_data["fields"] = self.get_dynamic_form_fields(field.child_relation)
 
-                if isinstance(field, AutocompleteRelatedField):
-                    field_data.update(
-                        {
-                            "type": "autocomplete",
-                            "url": field.reverse_url or None,
-                            "value": serializer.data.get("id", None),
-                        }
-                    )
-
-                if getattr(field, "max_length", None):
-                    field_data["max_length"] = field.max_length
-
-                if getattr(field, "max_digits", None):
-                    field_data["max_digits"] = field.max_digits
-
-                if getattr(field, "decimal_places", None):
-                    field_data["decimal_places"] = field.decimal_places
-
-                form_fields[field_name] = field_data
+            form_fields[field_name] = field_data
 
         return form_fields
 
