@@ -30,7 +30,8 @@ class DynamicFormsMixin:
     """
 
     def get_dynamic_form_fields(self, serializer):
-        """Extract field information from a serializer and create a dictionary
+        """
+        Extract field information from a serializer and create a dictionary
         suitable for building dynamic JSON form fields.
 
         Args:
