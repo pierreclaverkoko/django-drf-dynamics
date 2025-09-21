@@ -215,6 +215,140 @@ class DynamicFiltersMixin:
         }
 
     @classmethod
+    def filter_numeric(cls, title, name, operator="exact", min_value=None, max_value=None, step=1):
+        """
+        Create metadata for a numeric filter with operators.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the filter field.
+            operator (str, optional): The numeric operator (exact, gt, gte, lt, lte, range). Defaults to "exact".
+            min_value (float, optional): Minimum value for the filter. Defaults to None.
+            max_value (float, optional): Maximum value for the filter. Defaults to None.
+            step (float, optional): Step value for the filter. Defaults to 1.
+
+        Returns:
+            dict: Metadata for the numeric filter.
+        """
+        return {
+            "title": title,
+            "name": name,
+            "type": "numeric",
+            "data": {
+                "operator": operator,
+                "min_value": min_value,
+                "max_value": max_value,
+                "step": step,
+                "lookup_expr": operator,
+            },
+        }
+
+    @classmethod
+    def filter_text_search(cls, title, name, search_type="icontains", placeholder=None):
+        """
+        Create metadata for a text search filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the filter field.
+            search_type (str, optional): The search type (icontains, iexact, istartswith, etc.). Defaults to "icontains".
+            placeholder (str, optional): Placeholder text for the input. Defaults to None.
+
+        Returns:
+            dict: Metadata for the text search filter.
+        """
+        return {
+            "title": title,
+            "name": name,
+            "type": "text_search",
+            "data": {
+                "search_type": search_type,
+                "placeholder": placeholder,
+                "lookup_expr": search_type,
+            },
+        }
+
+    @classmethod
+    def filter_json(cls, title, name, operation="has_key", allowed_keys=None, json_key=None):
+        """
+        Create metadata for a JSON field filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the JSON field.
+            operation (str, optional): The JSON operation (has_key, contains, etc.). Defaults to "has_key".
+            allowed_keys (list, optional): List of allowed keys for filtering. Defaults to None.
+            json_key (str, optional): Specific JSON key to filter on. Defaults to None.
+
+        Returns:
+            dict: Metadata for the JSON filter.
+        """
+        return {
+            "title": title,
+            "name": name,
+            "type": "json",
+            "data": {
+                "operation": operation,
+                "allowed_keys": allowed_keys,
+                "key": json_key,
+                "lookup_expr": operation,
+            },
+        }
+
+    @classmethod
+    def filter_geographic(cls, title, name, geo_type="distance", default_distance=5, distance_unit="km"):
+        """
+        Create metadata for a geographic filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the geographic field.
+            geo_type (str, optional): The geographic operation type (distance, bbox). Defaults to "distance".
+            default_distance (int, optional): Default distance value. Defaults to 5.
+            distance_unit (str, optional): Distance unit (km, mi, m). Defaults to "km".
+
+        Returns:
+            dict: Metadata for the geographic filter.
+        """
+        return {
+            "title": title,
+            "name": name,
+            "type": "geographic",
+            "data": {
+                "geo_type": geo_type,
+                "default_distance": default_distance,
+                "distance_unit": distance_unit,
+            },
+        }
+
+    @classmethod
+    def filter_multi_field_search(cls, title, name, fields, search_type="icontains", placeholder=None):
+        """
+        Create metadata for a multi-field search filter.
+
+        Args:
+            title (str): The display title of the filter.
+            name (str): The name of the filter.
+            fields (list): List of field names to search across.
+            search_type (str, optional): The search type. Defaults to "icontains".
+            placeholder (str, optional): Placeholder text. Defaults to None.
+
+        Returns:
+            dict: Metadata for the multi-field search filter.
+        """
+        return {
+            "title": title,
+            "name": name,
+            "type": "multi_field_search",
+            "data": {
+                "fields": fields,
+                "search_type": search_type,
+                "placeholder": placeholder,
+                "lookup_expr": search_type,
+            },
+        }
+
+    @classmethod
     def build_select_choices(cls, select_choices):
         """
         Build a list of choices for a select filter.
