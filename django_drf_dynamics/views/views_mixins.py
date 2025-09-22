@@ -357,7 +357,12 @@ class ListOverviewAPIViewMixin(MultipleSerializerAPIMixin):
 
 
 class CustomGenericViewset(
-    ListOverviewAPIViewMixin, DrfDynamicsAPIViewMixin, ListConfigurationMixin, viewsets.GenericViewSet
+    ListOverviewAPIViewMixin,
+    DrfDynamicsAPIViewMixin,
+    ListConfigurationMixin,
+    DynamicListMixin,
+    RealtimeListMixin,
+    viewsets.GenericViewSet,
 ):
     """
     A custom generic viewset combining multiple mixins for dynamic API functionality.
