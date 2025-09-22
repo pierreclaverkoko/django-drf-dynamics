@@ -94,13 +94,11 @@ class DrfDynamicFilterBackend(filters.DjangoFilterBackend):
 
             # Find the right lookup expression
             lookup_expr = data.get("lookup_expr", None)
-            
+
             # Handle special filter types
             if metadata["type"] in ["select", "select_multiple"]:
                 choices = data.get("choices", [])
-                DynamicFilterSet.base_filters[metadata["name"]] = mapped_field(
-                    field_name=field_name, choices=choices
-                )
+                DynamicFilterSet.base_filters[metadata["name"]] = mapped_field(field_name=field_name, choices=choices)
             elif metadata["type"] == "json":
                 # Custom JSON field filtering
                 json_key = data.get("key")
