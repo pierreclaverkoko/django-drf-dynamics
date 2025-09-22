@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 
 from django_drf_dynamics._utils import DynamicFiltersMixin, DynamicFormsMixin
 from django_drf_dynamics.serializers.defaults import ObjectsLookupSerializer
+from django_drf_dynamics.lists import ListConfigurationMixin
 
 logger = logging.getLogger(__name__)
 
@@ -355,7 +356,9 @@ class ListOverviewAPIViewMixin(MultipleSerializerAPIMixin):
         raise NotImplementedError("Overview sub views must define the method 'get_objects_overview_data'.")
 
 
-class CustomGenericViewset(ListOverviewAPIViewMixin, DrfDynamicsAPIViewMixin, viewsets.GenericViewSet):
+class CustomGenericViewset(
+    ListOverviewAPIViewMixin, DrfDynamicsAPIViewMixin, ListConfigurationMixin, viewsets.GenericViewSet
+):
     """
     A custom generic viewset combining multiple mixins for dynamic API functionality.
     """
