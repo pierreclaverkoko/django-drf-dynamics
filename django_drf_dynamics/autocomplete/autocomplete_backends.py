@@ -94,6 +94,51 @@ class DatabaseAutocompleteBackend(BaseAutocompleteBackend):
 
         return search_q
 
+    def _get_model_field_string_value(self, instance, field_path):
+        """
+        Retrieves the string representation of a value from a Django model instance,
+        handling single fields and lookups across relations (e.g., 'course__title').
+        """
+        if not field_path:
+            return ""
+
+        # Start with the model instance
+        current_object = instance
+        
+        # Split the path by the double-underscore '__'
+        lookups = field_path.split('__')
+
+        # Traverse the lookups
+        for i, lookup in enumerate(lookups):
+            if current_object is None:
+                # If any object in the chain is None (e.g., a ForeignKey is null), stop
+                return ""
+
+            # Use getattr to get the attribute (field or related object)
+            value = getattr(current_object, lookup, None)
+
+            # Handle the type of value retrieved
+
+            # 1. If it's the last part of the path, we have the final value
+            if i == len(lookups) - 1:
+                # Check for a ManyToMany/Reverse relation (the value is a manager)
+                if hasattr(value, 'all') and callable(value.all):
+                    # Return a comma-separated list of related objects' string representations
+                    return ", ".join(str(obj) for obj in value.all())
+                
+                # For all other fields (Char, Int, Date, or a related object's __str__),
+                # simply convert it to a string.
+                return str(value) if value is not None else ""
+            
+            # 2. If it's an intermediate step, move to the next object
+            else:
+                # This must be a relation (ForeignKey, OneToOne)
+                # Set the retrieved value as the object for the next iteration
+                current_object = value
+
+        # Fallback return (should rarely be hit)
+        return ""
+
     def _apply_fuzzy_matching(
         self, results: List[Any], query: str, fields: List[str], config: Dict[str, Any]
     ) -> List[Any]:
@@ -116,7 +161,7 @@ class DatabaseAutocompleteBackend(BaseAutocompleteBackend):
             max_similarity = 0.0
 
             for field in fields:
-                field_value = str(getattr(result, field, ""))
+                field_value = self._get_model_field_string_value(result, field) # str(getattr(result, field, ""))
                 similarity = SequenceMatcher(None, query.lower(), field_value.lower()).ratio()
                 max_similarity = max(max_similarity, similarity)
 
