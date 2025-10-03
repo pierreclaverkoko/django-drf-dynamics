@@ -10,7 +10,8 @@ class AutocompleteItemSerializer(serializers.Serializer):
     """
 
     id = serializers.CharField()
-    text = serializers.CharField()
+    title = serializers.CharField()
+    subtitle = serializers.CharField(required=False)
     value = serializers.CharField(required=False)
 
     # Additional metadata
@@ -42,7 +43,8 @@ class AutocompleteItemSerializer(serializers.Serializer):
 
         data = {
             "id": str(instance.id),
-            "text": text,
+            "title": text,
+            "subtitle": text,
             "value": str(instance.id),
         }
 
