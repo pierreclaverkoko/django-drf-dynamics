@@ -67,6 +67,82 @@ A powerful Django third-party package that provides dynamic components for Djang
 pip install django-drf-dynamics
 ```
 
+## Custom serializer fields
+
+These live under `django_drf_dynamics.serializers` and are meant for list/detail APIs consumed by dynamic UIs (tables, badges, composite cells).
+
+### `ChoiceEnumField`
+
+Serializes a model **choice** column as a small JSON object for styled tags (value + human label + optional CSS hint).
+
+- **Requires** on the model instance: Django’s usual `get_<field>_display()` for that field.
+- **Optional** on the instance: `get_<field>_css()` returning a string such as `success`, `danger`, `warning`, `info`, or `default` (frontends map these to badge colors).
+
+```python
+from django_drf_dynamics.serializers import ChoiceEnumField
+
+class OrderSerializer(serializers.ModelSerializer):
+    status = ChoiceEnumField()
+
+    class Meta:
+        model = Order
+        fields = ("id", "status")
+```
+
+Output shape:
+
+```json
+{
+  "status": { "value": "PAID", "title": "Paid", "css": "success" }
+}
+```
+
+You can also pass `method_name=` to delegate to a custom serializer method instead of the default behavior.
+
+### `CompositeCellField`
+
+Produces a **versioned composite cell** for one table column (e.g. logo + title + subtitle). Two modes are **mutually exclusive**:
+
+1. **Declarative** — set `layout` and `primary_path` (dotted lookups from the serialized instance, e.g. `financial_entity.name`). Optional: `secondary_path`, `tertiary_path`, `image_url_path`, `image_alt_path`. Supports attribute chains and dict keys (including JSONField segments).
+2. **Serializer method** — omit `primary_path` and implement `get_<field_name>(self, obj)` returning a dict; it is normalized with `validate_composite_cell`.
+
+Constants: `COMPOSITE_CELL_KIND`, `COMPOSITE_LAYOUT_MEDIA_TWO_LINE`, `COMPOSITE_LAYOUT_AVATAR_NAME_EMAIL`, `COMPOSITE_LAYOUT_LOGO_NAME`.
+
+Declarative example:
+
+```python
+from django_drf_dynamics.serializers import CompositeCellField, COMPOSITE_LAYOUT_MEDIA_TWO_LINE
+
+class DepositSerializer(serializers.ModelSerializer):
+    provider = CompositeCellField(
+        layout=COMPOSITE_LAYOUT_MEDIA_TWO_LINE,
+        primary_path="financial_entity.name",
+        secondary_path="financial_entity.code",
+    )
+```
+
+Normalized JSON (abbreviated):
+
+```json
+{
+  "kind": "dynamics.composite_cell.v1",
+  "layout": "media_two_line",
+  "primary": "Mpesa RDC",
+  "secondary": "VODACOM_MPESA_COD",
+  "image": { "url": "https://...", "alt": "Mpesa RDC" }
+}
+```
+
+Use `validate_composite_cell(data)` if you build the dict manually (e.g. in a service).
+
+### `JsonLoadSerializerMethodField`
+
+Points at a model **text** field that stores JSON; when no custom `method_name` is set, it `json.loads` that field for the API response.
+
+### `AutocompleteRelatedField`
+
+Primary-key related field that also carries an `url` for the autocomplete endpoint (for dynamic forms/filters that need a resolved route).
+
 ## Quick Setup
 
 1. Add to your `INSTALLED_APPS`:
