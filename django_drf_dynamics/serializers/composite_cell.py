@@ -31,13 +31,15 @@ ALLOWED_LAYOUTS: frozenset[str] = frozenset(
 
 def resolve_dotted_path(obj: Any, path: str | None) -> Any:
     """
-    Walk ``obj`` using a dotted path. Supports model attributes and ``dict`` /
-    ``Mapping`` keys (including nested :class:`~django.db.models.JSONField` data).
+    Walk ``obj`` using a dotted path.
+
+    Supports model attributes and ``dict`` / ``Mapping`` keys (including nested
+    JSONField data).
 
     Args:
         obj: Root instance (e.g. model).
-        path: Dot-separated segments (e.g. ``financial_entity.name``). ``None`` or
-            empty string returns ``None``.
+        path: Dot-separated segments (e.g. ``financial_entity.name``).
+            ``None`` or empty string returns ``None``.
 
     Returns:
         The resolved value, or ``None`` if a segment is missing.
@@ -66,15 +68,15 @@ def validate_composite_cell(data: Any) -> dict[str, Any]:
     Validate and normalize a composite cell payload.
 
     Args:
-        data: Dict returned from declarative :class:`CompositeCellField` or from
+        data: Dict from declarative :class:`CompositeCellField` or from
             ``get_<name>(obj)``.
 
     Returns:
-        A new dict with ``kind``, ``layout``, ``primary``, optional ``secondary``,
-        ``tertiary``, and optional ``image``.
+        A new dict with ``kind``, ``layout``, ``primary``, optional
+        ``secondary``, ``tertiary``, and optional ``image``.
 
     Raises:
-        rest_framework.exceptions.ValidationError: If the payload is invalid.
+        rest_framework.exceptions.ValidationError: If invalid.
     """
     if not isinstance(data, Mapping):
         raise ValidationError("Composite cell must be a JSON object.")
@@ -82,13 +84,15 @@ def validate_composite_cell(data: Any) -> dict[str, Any]:
     kind = data.get("kind")
     if kind != COMPOSITE_CELL_KIND:
         raise ValidationError(
-            f'Composite cell "kind" must be "{COMPOSITE_CELL_KIND}", got {kind!r}.'
+            f'Composite cell "kind" must be "{COMPOSITE_CELL_KIND}", '
+            f"got {kind!r}."
         )
 
     layout = data.get("layout")
     if layout not in ALLOWED_LAYOUTS:
+        allowed = sorted(ALLOWED_LAYOUTS)
         raise ValidationError(
-            f"Composite cell layout must be one of {sorted(ALLOWED_LAYOUTS)}, got {layout!r}."
+            f"Composite cell layout must be one of {allowed}, got {layout!r}."
         )
 
     primary = _clean_str(data.get("primary"))
@@ -99,7 +103,9 @@ def validate_composite_cell(data: Any) -> dict[str, Any]:
     raw_image = data.get("image")
     if raw_image is not None:
         if not isinstance(raw_image, Mapping):
-            raise ValidationError('Composite cell "image" must be an object when present.')
+            raise ValidationError(
+                'Composite cell "image" must be an object when present.'
+            )
         url = _clean_str(raw_image.get("url"))
         alt = _clean_str(raw_image.get("alt"))
         image = {}
@@ -114,21 +120,23 @@ def validate_composite_cell(data: Any) -> dict[str, Any]:
     if layout == COMPOSITE_LAYOUT_AVATAR_NAME_EMAIL:
         if not primary:
             raise ValidationError(
-                'Composite cell layout "avatar_name_email" requires non-empty "primary" (display name).'
+                'Layout "avatar_name_email" requires non-empty "primary" '
+                "(display name)."
             )
         if not secondary:
             raise ValidationError(
-                'Composite cell layout "avatar_name_email" requires non-empty "secondary" (email).'
+                'Layout "avatar_name_email" requires non-empty "secondary" '
+                "(email)."
             )
     elif layout == COMPOSITE_LAYOUT_LOGO_NAME:
         if not primary:
             raise ValidationError(
-                'Composite cell layout "logo_name" requires non-empty "primary" (name).'
+                'Layout "logo_name" requires non-empty "primary" (name).'
             )
     else:  # media_two_line
         if not primary:
             raise ValidationError(
-                'Composite cell layout "media_two_line" requires non-empty "primary".'
+                'Layout "media_two_line" requires non-empty "primary".'
             )
 
     out: dict[str, Any] = {
@@ -147,19 +155,20 @@ def validate_composite_cell(data: Any) -> dict[str, Any]:
 
 class CompositeCellField(serializers.Field):
     """
-    Read-only field that emits a **composite cell** JSON object for dynamic tables.
+    Read-only field that emits a **composite cell** JSON object for dynamic
+    tables.
 
     Two modes (mutually exclusive):
 
-    1. **Declarative** — pass ``layout`` and ``primary_path`` (dotted lookups from
-       the serialized model instance, e.g. ``financial_entity.name``). Optional
-       ``secondary_path``, ``tertiary_path``, ``image_url_path``, ``image_alt_path``.
-       No ``get_<field_name>()`` method is required.
+    1. **Declarative** — pass ``layout`` and ``primary_path`` (dotted lookups
+       from the serialized model instance, e.g. ``financial_entity.name``).
+       Optional ``secondary_path``, ``tertiary_path``, ``image_url_path``,
+       ``image_alt_path``. No ``get_<field_name>()`` method is required.
 
-    2. **Serializer method** — omit ``primary_path``. Implement ``get_<field_name>(self, obj)``
-       on the parent serializer and return a dict that includes ``kind``,
-       ``layout``, and the usual keys; it will be passed through
-       :func:`validate_composite_cell`.
+    2. **Serializer method** — omit ``primary_path``. Implement
+       ``get_<field_name>(self, obj)`` on the parent serializer and return a
+       dict that includes ``kind``, ``layout``, and the usual keys; it will be
+       passed through :func:`validate_composite_cell`.
 
     The output is always validated with :func:`validate_composite_cell`.
 
@@ -171,7 +180,7 @@ class CompositeCellField(serializers.Field):
         tertiary_path: Optional third line.
         image_url_path: Optional dotted path resolving to an image URL string.
         image_alt_path: Optional dotted path for image alt text; defaults to
-            primary text when the image block is present.
+            primary text when the image block is present (declarative mode).
 
     Example (declarative):
 
@@ -218,7 +227,11 @@ class CompositeCellField(serializers.Field):
         self.image_alt_path = image_alt_path
         super().__init__(**kwargs)
 
-    def bind(self, field_name: str, parent: serializers.BaseSerializer | None) -> None:
+    def bind(
+        self,
+        field_name: str,
+        parent: serializers.BaseSerializer | None,
+    ) -> None:
         super().bind(field_name, parent)
         self._method_name = f"get_{field_name}"
 
@@ -232,33 +245,45 @@ class CompositeCellField(serializers.Field):
             data = self._build_declarative(obj)
         else:
             if self.parent is None:
-                raise ValidationError("CompositeCellField requires a bound parent serializer.")
+                raise ValidationError(
+                    "CompositeCellField requires a bound parent serializer."
+                )
             method = getattr(self.parent, self._method_name, None)
             if method is None or not callable(method):
-                raise ValidationError(
-                    f"CompositeCellField in method mode requires a callable '{self._method_name}' "
-                    "on the serializer, or use declarative mode with 'primary_path'."
+                msg = (
+                    f"CompositeCellField in method mode requires a callable "
+                    f"'{self._method_name}' on the serializer, or use "
+                    "declarative mode with 'primary_path'."
                 )
+                raise ValidationError(msg)
             data = method(obj)
         return validate_composite_cell(data)
 
     def _build_declarative(self, obj: Any) -> dict[str, Any]:
         if self._declarative_layout is None:
             raise ValidationError(
-                "CompositeCellField: `layout` is required when `primary_path` is set."
+                "CompositeCellField: `layout` is required when "
+                "`primary_path` is set."
             )
         primary = _clean_str(resolve_dotted_path(obj, self.primary_path))
-        secondary = (
-            _clean_str(resolve_dotted_path(obj, self.secondary_path)) if self.secondary_path else ""
-        )
-        tertiary = _clean_str(resolve_dotted_path(obj, self.tertiary_path)) if self.tertiary_path else ""
+        if self.secondary_path:
+            sec_val = resolve_dotted_path(obj, self.secondary_path)
+            secondary = _clean_str(sec_val)
+        else:
+            secondary = ""
+        if self.tertiary_path:
+            tertiary = _clean_str(resolve_dotted_path(obj, self.tertiary_path))
+        else:
+            tertiary = ""
 
-        url_raw = (
-            resolve_dotted_path(obj, self.image_url_path) if self.image_url_path else None
-        )
-        alt_raw = (
-            resolve_dotted_path(obj, self.image_alt_path) if self.image_alt_path else None
-        )
+        if self.image_url_path:
+            url_raw = resolve_dotted_path(obj, self.image_url_path)
+        else:
+            url_raw = None
+        if self.image_alt_path:
+            alt_raw = resolve_dotted_path(obj, self.image_alt_path)
+        else:
+            alt_raw = None
 
         url = _clean_str(url_raw)
         alt = _clean_str(alt_raw)
