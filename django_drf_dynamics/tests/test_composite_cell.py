@@ -50,11 +50,12 @@ class ValidateCompositeCellTests(unittest.TestCase):
                 {"kind": "x", "layout": COMPOSITE_LAYOUT_MEDIA_TWO_LINE, "primary": "A"}
             )
 
-    def test_rejects_empty_primary_for_media_two_line(self) -> None:
-        with self.assertRaises(ValidationError):
-            validate_composite_cell(
-                {"kind": COMPOSITE_CELL_KIND, "layout": COMPOSITE_LAYOUT_MEDIA_TWO_LINE, "primary": ""}
-            )
+    def test_accepts_empty_primary_for_media_two_line(self) -> None:
+        out = validate_composite_cell(
+            {"kind": COMPOSITE_CELL_KIND, "layout": COMPOSITE_LAYOUT_MEDIA_TWO_LINE, "primary": ""}
+        )
+        self.assertEqual(out["primary"], "")
+        self.assertNotIn("secondary", out)
 
 
 class CompositeCellFieldTests(unittest.TestCase):

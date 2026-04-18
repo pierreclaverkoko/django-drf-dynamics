@@ -97,7 +97,7 @@ class DrfDynamicFilterBackend(filters.DjangoFilterBackend):
 
             # Handle special filter types
             if metadata["type"] in ["select", "select_multiple"]:
-                choices = data.get("choices", [])
+                choices = self._coerce_choicefilter_choices(data.get("choices", []))
                 DynamicFilterSet.base_filters[metadata["name"]] = mapped_field(field_name=field_name, choices=choices)
             elif metadata["type"] == "json":
                 # Custom JSON field filtering
@@ -170,3 +170,25 @@ class DrfDynamicFilterBackend(filters.DjangoFilterBackend):
 
         # Call the parent class logic
         return super().get_filterset_class(view, queryset=queryset)
+
+    @staticmethod
+    def _coerce_choicefilter_choices(choices):
+        """
+        ``DynamicFiltersMixin.build_select_choices`` returns UI-oriented dicts
+        (title/value/selected). Django's form ``ChoiceField`` expects iterable
+        of ``(value, label)`` pairs; otherwise validation raises
+        ``ValueError: too many values to unpack (expected 2)``.
+        """
+        if not choices:
+            return []
+        first = choices[0]
+        if isinstance(first, dict):
+            normalized = []
+            for item in choices:
+                if not isinstance(item, dict):
+                    continue
+                val = item.get("value", "")
+                label = item.get("title", item.get("label", str(val)))
+                normalized.append((val, label))
+            return normalized
+        return list(choices)

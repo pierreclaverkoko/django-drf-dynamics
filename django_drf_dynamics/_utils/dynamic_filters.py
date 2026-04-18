@@ -215,26 +215,29 @@ class DynamicFiltersMixin:
         }
 
     @classmethod
-    def filter_numeric(cls, title, name, operator="exact", min_value=None, max_value=None, step=1):
+    def filter_numeric(cls, title, name, operator="exact", min_value=None, max_value=None, step=1, field_name=None):
         """
         Create metadata for a numeric filter with operators.
 
         Args:
             title (str): The display title of the filter.
-            name (str): The name of the filter field.
+            name (str): Query parameter / filter key (use distinct names for min and max on the same ORM field).
             operator (str, optional): The numeric operator (exact, gt, gte, lt, lte, range). Defaults to "exact".
             min_value (float, optional): Minimum value for the filter. Defaults to None.
             max_value (float, optional): Maximum value for the filter. Defaults to None.
             step (float, optional): Step value for the filter. Defaults to 1.
+            field_name (str, optional): ORM field to filter; defaults to ``name`` when omitted.
 
         Returns:
             dict: Metadata for the numeric filter.
         """
+        orm_field = field_name if field_name is not None else name
         return {
             "title": title,
             "name": name,
             "type": "numeric",
             "data": {
+                "field_name": orm_field,
                 "operator": operator,
                 "min_value": min_value,
                 "max_value": max_value,

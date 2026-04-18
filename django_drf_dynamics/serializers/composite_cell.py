@@ -72,8 +72,8 @@ def validate_composite_cell(data: Any) -> dict[str, Any]:
             ``get_<name>(obj)``.
 
     Returns:
-        A new dict with ``kind``, ``layout``, ``primary``, optional
-        ``secondary``, ``tertiary``, and optional ``image``.
+        A new dict with ``kind``, ``layout``, ``primary`` (may be empty),
+        optional ``secondary``, ``tertiary``, and optional ``image``.
 
     Raises:
         rest_framework.exceptions.ValidationError: If invalid.
@@ -116,28 +116,7 @@ def validate_composite_cell(data: Any) -> dict[str, Any]:
         if not image:
             image = None
 
-    # Per-layout required fields
-    if layout == COMPOSITE_LAYOUT_AVATAR_NAME_EMAIL:
-        if not primary:
-            raise ValidationError(
-                'Layout "avatar_name_email" requires non-empty "primary" '
-                "(display name)."
-            )
-        if not secondary:
-            raise ValidationError(
-                'Layout "avatar_name_email" requires non-empty "secondary" '
-                "(email)."
-            )
-    elif layout == COMPOSITE_LAYOUT_LOGO_NAME:
-        if not primary:
-            raise ValidationError(
-                'Layout "logo_name" requires non-empty "primary" (name).'
-            )
-    else:  # media_two_line
-        if not primary:
-            raise ValidationError(
-                'Layout "media_two_line" requires non-empty "primary".'
-            )
+    # primary/secondary may be empty (e.g. optional FK paths); UIs should handle blanks.
 
     out: dict[str, Any] = {
         "kind": COMPOSITE_CELL_KIND,
