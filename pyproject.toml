@@ -7,6 +7,7 @@ name = "django-drf-dynamics"
 version = "0.0.11"
 dependencies = [
     "django>=4.2",
+    "djangorestframework>=3.14",
     "django-filter>=25.1",
 ]
 description = "A Django app for restframework dynamic components."
