@@ -14,6 +14,8 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 COMPOSITE_CELL_KIND: Final[str] = "dynamics.composite_cell.v1"
+STACKED_CELL_KIND: Final[str] = "dynamics.stacked_cell.v1"
+AMOUNT_COMPOSITE_KIND: Final[str] = "dynamics.amount_currency.v1"
 
 # Layout identifiers consumed by frontends (e.g. Angular DynamicListComponent).
 COMPOSITE_LAYOUT_MEDIA_TWO_LINE: Final[str] = "media_two_line"
@@ -130,6 +132,70 @@ def validate_composite_cell(data: Any) -> dict[str, Any]:
     if image:
         out["image"] = image
     return out
+
+
+def validate_stacked_cell(data: Any) -> dict[str, str]:
+    """
+    Validate and normalize a stacked two-line cell payload.
+
+    Expected shape:
+    {
+        "kind": "dynamics.stacked_cell.v1",
+        "top": "...",
+        "bottom": "...",
+    }
+    """
+    if not isinstance(data, Mapping):
+        raise ValidationError("Stacked cell must be a JSON object.")
+
+    kind = data.get("kind")
+    if kind != STACKED_CELL_KIND:
+        raise ValidationError(
+            f'Stacked cell "kind" must be "{STACKED_CELL_KIND}", got {kind!r}.'
+        )
+
+    top = _clean_str(data.get("top"))
+    bottom = _clean_str(data.get("bottom"))
+    return {
+        "kind": STACKED_CELL_KIND,
+        "top": top,
+        "bottom": bottom,
+    }
+
+
+def validate_amount_composite(data: Any) -> dict[str, str]:
+    """
+    Validate and normalize an amount+currency composite payload.
+
+    Expected shape:
+    {
+        "kind": "dynamics.amount_currency.v1",
+        "amount": "...",
+        "currency": "...",
+    }
+    """
+    if not isinstance(data, Mapping):
+        raise ValidationError("Amount composite must be a JSON object.")
+
+    kind = data.get("kind")
+    if kind != AMOUNT_COMPOSITE_KIND:
+        raise ValidationError(
+            f'Amount composite "kind" must be "{AMOUNT_COMPOSITE_KIND}", got {kind!r}.'
+        )
+
+    amount = _clean_str(data.get("amount"))
+    currency = _clean_str(data.get("currency")).upper()
+
+    if not amount:
+        raise ValidationError('Amount composite "amount" is required.')
+    if not currency:
+        raise ValidationError('Amount composite "currency" is required.')
+
+    return {
+        "kind": AMOUNT_COMPOSITE_KIND,
+        "amount": amount,
+        "currency": currency,
+    }
 
 
 class CompositeCellField(serializers.Field):
@@ -289,3 +355,118 @@ class CompositeCellField(serializers.Field):
         if image:
             data["image"] = image
         return data
+
+
+class StackedCellField(serializers.Field):
+    """
+    Read-only field that emits a 2-line stacked cell JSON object.
+
+    Declarative mode:
+      - provide ``top_path`` and/or ``bottom_path``
+    Method mode:
+      - omit paths and implement ``get_<field_name>(self, obj)``.
+    """
+
+    def __init__(
+        self,
+        top_path: str | None = None,
+        bottom_path: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        kwargs.setdefault("read_only", True)
+        kwargs.setdefault("source", "*")
+        self.top_path = top_path
+        self.bottom_path = bottom_path
+        super().__init__(**kwargs)
+
+    def bind(
+        self,
+        field_name: str,
+        parent: serializers.BaseSerializer | None,
+    ) -> None:
+        super().bind(field_name, parent)
+        self._method_name = f"get_{field_name}"
+
+    def to_representation(self, value: Any) -> dict[str, str]:
+        obj = value
+        if self.top_path is not None or self.bottom_path is not None:
+            data = {
+                "kind": STACKED_CELL_KIND,
+                "top": _clean_str(resolve_dotted_path(obj, self.top_path)),
+                "bottom": _clean_str(resolve_dotted_path(obj, self.bottom_path)),
+            }
+            return validate_stacked_cell(data)
+
+        if self.parent is None:
+            raise ValidationError("StackedCellField requires a bound parent serializer.")
+        method = getattr(self.parent, self._method_name, None)
+        if method is None or not callable(method):
+            msg = (
+                f"StackedCellField in method mode requires a callable "
+                f"'{self._method_name}' on the serializer, or use declarative mode "
+                "with 'top_path'/'bottom_path'."
+            )
+            raise ValidationError(msg)
+        data = method(obj)
+        return validate_stacked_cell(data)
+
+
+class AmountCompositeField(serializers.Field):
+    """
+    Read-only field that emits an amount+currency composite JSON object.
+
+    Declarative mode:
+      - provide both ``amount_path`` and ``currency_path``.
+    Method mode:
+      - omit paths and implement ``get_<field_name>(self, obj)``.
+    """
+
+    def __init__(
+        self,
+        amount_path: str | None = None,
+        currency_path: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        kwargs.setdefault("read_only", True)
+        kwargs.setdefault("source", "*")
+        self.amount_path = amount_path
+        self.currency_path = currency_path
+        super().__init__(**kwargs)
+
+    def bind(
+        self,
+        field_name: str,
+        parent: serializers.BaseSerializer | None,
+    ) -> None:
+        super().bind(field_name, parent)
+        self._method_name = f"get_{field_name}"
+
+    def to_representation(self, value: Any) -> dict[str, str]:
+        obj = value
+        if self.amount_path is not None or self.currency_path is not None:
+            if not self.amount_path or not self.currency_path:
+                raise ValidationError(
+                    "AmountCompositeField declarative mode requires both "
+                    "'amount_path' and 'currency_path'."
+                )
+            data = {
+                "kind": AMOUNT_COMPOSITE_KIND,
+                "amount": _clean_str(resolve_dotted_path(obj, self.amount_path)),
+                "currency": _clean_str(resolve_dotted_path(obj, self.currency_path)),
+            }
+            return validate_amount_composite(data)
+
+        if self.parent is None:
+            raise ValidationError(
+                "AmountCompositeField requires a bound parent serializer."
+            )
+        method = getattr(self.parent, self._method_name, None)
+        if method is None or not callable(method):
+            msg = (
+                f"AmountCompositeField in method mode requires a callable "
+                f"'{self._method_name}' on the serializer, or use declarative mode "
+                "with 'amount_path'/'currency_path'."
+            )
+            raise ValidationError(msg)
+        data = method(obj)
+        return validate_amount_composite(data)
