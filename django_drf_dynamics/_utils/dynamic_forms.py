@@ -1,10 +1,11 @@
 from django.utils.translation import gettext as _
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.fields import ChoiceField
 from rest_framework.serializers import ValidationError, Serializer
 from rest_framework.utils.serializer_helpers import ReturnDict  # BindingDict,
 
-from django_drf_dynamics.serializers.fields import AutocompleteRelatedField
+from django_drf_dynamics.serializers.fields import AutocompleteRelatedField, ChoiceEnumField
 
 
 class DynamicFormsMixin:
@@ -42,18 +43,61 @@ class DynamicFormsMixin:
         "choicefield": "select",
         "multiplechoicefield": "select-multiple",
         "filefield": "file",
-        "imagefield": "file",
+        "imagefield": "image",
         "relationfield": "select",
         "relatedfield": "select",
         "autocompletefield": "autocomplete",
         "primarykeyrelatedfield": "autocomplete",
         "jsonfield": "json",
+        "choiceenumfield": "select",
         "listfield": "array",
         "dictfield": "object",
         "nestedserializerfield": "object",
         "nestedlistserializerfield": "array",
         "nesteddictserializerfield": "object",
     }
+
+
+    def _get_form_field_choices(self, field):
+        """
+        Return choices for dynamic forms without triggering related-field querysets.
+
+        ChoiceEnumField and ChoiceField expose a mapping; normalize to a list of
+        ``{"value", "display_name"}`` dicts for frontend select widgets.
+        """
+        if isinstance(field, AutocompleteRelatedField):
+            return None
+        # Related fields expose a ``choices`` property that queries the DB.
+        if getattr(field, "queryset", None) is not None or hasattr(field, "get_queryset"):
+            return None
+        if isinstance(field, ChoiceEnumField):
+            choice_map = field.choices or {}
+            return [{"value": value, "display_name": str(label)} for value, label in choice_map.items()]
+        choice_map = getattr(field, "_choices", None)
+        if choice_map is None and "choices" in getattr(field, "__dict__", {}):
+            choice_map = field.__dict__.get("choices")
+        if choice_map is None:
+            # Prefer typed ChoiceField-style fields only (avoid descriptor side effects).
+            if isinstance(field, ChoiceField):
+                choice_map = field.choices
+        if not choice_map:
+            return None
+        if isinstance(choice_map, dict):
+            return [{"value": value, "display_name": str(label)} for value, label in choice_map.items()]
+        if isinstance(choice_map, (list, tuple)):
+            normalized = []
+            for item in choice_map:
+                if isinstance(item, dict) and "value" in item:
+                    normalized.append(
+                        {
+                            "value": item["value"],
+                            "display_name": str(item.get("display_name", item.get("label", item["value"]))),
+                        }
+                    )
+                elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                    normalized.append({"value": item[0], "display_name": str(item[1])})
+            return normalized or None
+        return None
 
     def get_dynamic_form_fields(self, serializer):
         """
@@ -84,20 +128,24 @@ class DynamicFormsMixin:
                 continue
 
             field_type = field.__class__.__name__.lower()  # Convert class name to lowercase type
+            html_type = self.SERIALIZER_FIELD_MAPPING.get(field_type, field_type)
             field_data = {
                 "type": field_type,
-                "html_type": self.SERIALIZER_FIELD_MAPPING.get(field_type, field_type),
+                "html_type": html_type,
                 "label": field.label or (field_name.lower().replace("_", " ").capitalize()),
-                "required": field.required or getattr(field, "allow_null", False),
+                "required": bool(field.required),
                 "help_text": field.help_text,
-                "choices": (
-                    field.choices
-                    if not isinstance(field, AutocompleteRelatedField) and hasattr(field, "choices")
-                    else None
-                ),
+                "choices": self._get_form_field_choices(field),
                 "value": (serializer.data.get(field_name, None) if isinstance(serializer.data, ReturnDict) else None),
                 "accept_multiple_entries": False,
             }
+
+            if html_type == "json" or field_type in {"jsonfield", "dictfield"}:
+                field_data["editor"] = "key_value_json"
+
+            if isinstance(field, ChoiceEnumField):
+                field_data["type"] = "choiceenumfield"
+                field_data["html_type"] = "select"
 
             if isinstance(field, AutocompleteRelatedField):
                 field_data.update(
@@ -116,6 +164,20 @@ class DynamicFormsMixin:
 
             if getattr(field, "decimal_places", None):
                 field_data["decimal_places"] = field.decimal_places
+
+            # File / image upload metadata for frontend dropzone editors
+            if field_type in {"filefield", "imagefield"} or html_type in {"file", "image"}:
+                field_data["accept"] = "image/*" if (field_type == "imagefield" or html_type == "image") else "*/*"
+
+            # ListField of files/images → multi upload
+            child = getattr(field, "child", None)
+            if field_type == "listfield" and child is not None:
+                child_type = child.__class__.__name__.lower()
+                if child_type in {"filefield", "imagefield"}:
+                    field_data["accept_multiple_entries"] = True
+                    field_data["html_type"] = "image" if child_type == "imagefield" else "file"
+                    field_data["type"] = child_type
+                    field_data["accept"] = "image/*" if child_type == "imagefield" else "*/*"
 
             # MULTIPLE FIELDS MANAGEMENT
             if isinstance(field, Serializer):

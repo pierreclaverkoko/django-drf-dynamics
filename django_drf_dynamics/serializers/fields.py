@@ -4,14 +4,17 @@ from rest_framework import serializers
 from django.urls import reverse_lazy
 
 
-class ChoiceEnumField(serializers.SerializerMethodField):
+class ChoiceEnumField(serializers.Field):
     """
-    A read-only field that gets its representation from calling a method on
-    the parent serializer class or by returning a dictionary representation
-    of a choice field.
+    Choice field with rich read representation and writable input.
 
-    This field is useful for serializing choice fields in a structured format
-    (e.g., with value, title, and CSS class).
+    On read, returns ``{value, title, css}`` (via model ``get_<name>_display`` /
+    ``get_<name>_css`` when available). On write, accepts a raw choice value or
+    a dict with a ``value`` key.
+
+    When ``choice_field_name`` differs from the serializer field name (e.g.
+    ``status_display = ChoiceEnumField(choice_field_name="status")``), the field
+    is forced read-only.
 
     Example usage:
 
@@ -38,9 +41,6 @@ class ChoiceEnumField(serializers.SerializerMethodField):
     #     }
     # }
     ```
-
-    Attributes:
-        NO_FIELD_PLACEHOLDER (str): Placeholder for when no method name is provided.
     """
 
     NO_FIELD_PLACEHOLDER = "__no_field_to_consider"
@@ -50,70 +50,171 @@ class ChoiceEnumField(serializers.SerializerMethodField):
         Initialize the ChoiceEnumField.
 
         Args:
-            method_name (str, optional): The name of the method to call on the parent serializer.
-            choice_field_name (str, optional): The name of the choice field to serialize.
+            method_name (str, optional): Custom parent serializer method for representation.
+            choice_field_name (str, optional): Model choice field to serialize.
             **kwargs: Additional keyword arguments for the parent class.
         """
         self.choice_field_name = choice_field_name
-        super().__init__(method_name=method_name, **kwargs)
+        self.method_name = method_name if method_name is not None else self.NO_FIELD_PLACEHOLDER
+        self._choice_map = None
+        super().__init__(**kwargs)
 
     def bind(self, field_name, parent):
         """
-        Bind the field to the parent serializer.
-
-        Args:
-            field_name (str): The name of the field.
-            parent (Serializer): The parent serializer instance.
+        Bind the field to the parent serializer and resolve model choices.
         """
-        if self.method_name is None:
-            self.method_name = self.NO_FIELD_PLACEHOLDER
-
         if not self.choice_field_name:
             self.choice_field_name = field_name
 
+        # Display aliases (different serializer name vs model field) stay read-only.
+        if field_name != self.choice_field_name:
+            self.read_only = True
+
         super().bind(field_name, parent)
+        self._resolve_choices_from_model()
+
+    def _resolve_choices_from_model(self):
+        """Populate choice map from the bound ModelSerializer model when possible."""
+        if self._choice_map is not None:
+            return
+        model = getattr(getattr(self.parent, "Meta", None), "model", None)
+        if model is None or not self.choice_field_name:
+            self._choice_map = {}
+            return
+        try:
+            model_field = model._meta.get_field(self.choice_field_name)
+        except Exception:
+            self._choice_map = {}
+            return
+        raw_choices = getattr(model_field, "choices", None) or ()
+        # ArrayField / similar: choices live on the base/child field.
+        if not raw_choices and hasattr(model_field, "base_field"):
+            raw_choices = getattr(model_field.base_field, "choices", None) or ()
+        self._choice_map = {key: label for key, label in raw_choices}
+
+    @property
+    def choices(self):
+        """Choice mapping for OPTIONS / dynamic forms (value -> display label)."""
+        if self._choice_map is None:
+            self._resolve_choices_from_model()
+        return self._choice_map or {}
+
+    def get_attribute(self, instance):
+        """Return the full instance so representation can call display/css helpers."""
+        return instance
 
     def to_representation(self, value):
         """
-        Convert the field value to its serialized representation.
-
-        Args:
-            value: The field value.
-
-        Returns:
-            dict or any: The serialized representation of the field.
+        Convert the instance (or value) to the rich choice representation.
         """
-        if self.method_name == self.NO_FIELD_PLACEHOLDER:
-            return self.get_choice_dict_from_value(value)
+        if self.method_name != self.NO_FIELD_PLACEHOLDER:
+            method = getattr(self.parent, self.method_name)
+            return method(value)
 
-        method = getattr(self.parent, self.method_name)
-        return method(value)
+        return self.get_choice_dict_from_value(value)
 
     def get_choice_dict_from_value(self, obj):
         """
         Get the dictionary representation of a choice field.
 
         Args:
-            obj: The object containing the choice field.
+            obj: The object containing the choice field (or None).
 
         Returns:
-            dict or any: A dictionary with value, title, and CSS class, or the raw value.
+            dict | list | any: A ``{value, title, css}`` object, a list of those for
+            multi-value (ArrayField) choices, or the raw value.
         """
-        if self.choice_field_name:
-            field_value = getattr(obj, self.choice_field_name, None)
-            if field_value in [None, "", "None"]:
-                return field_value
+        if obj is None:
+            return None
 
-            field_value_display_func = getattr(obj, f"get_{self.choice_field_name}_display", None)
-            field_value_css_func = getattr(obj, f"get_{self.choice_field_name}_css", None)
+        if not self.choice_field_name:
+            return None
 
-            if not field_value_display_func:
-                return field_value
+        field_value = getattr(obj, self.choice_field_name, None)
+        if field_value in [None, "", "None"]:
+            return field_value
 
-            field_value_display = field_value_display_func()
-            field_value_css = field_value_css_func() if field_value_css_func else "default"
+        # Multi-value choices (e.g. ArrayField of TextChoices).
+        if isinstance(field_value, (list, tuple)):
+            return self._represent_multi_choice(obj, list(field_value))
 
-            return {"value": field_value, "title": field_value_display, "css": field_value_css}
+        field_value_display_func = getattr(obj, f"get_{self.choice_field_name}_display", None)
+        field_value_css_func = getattr(obj, f"get_{self.choice_field_name}_css", None)
+        css = "default"
+        if field_value_css_func:
+            css_result = field_value_css_func()
+            # Per-item maps belong to multi-value fields; ignore dicts for scalars.
+            css = css_result if isinstance(css_result, str) else "default"
+
+        if field_value_display_func:
+            title = field_value_display_func()
+        else:
+            title = self.choices.get(field_value, field_value)
+
+        if title == field_value and not field_value_css_func and not self.choices:
+            return field_value
+
+        return {"value": field_value, "title": title, "css": css}
+
+    def _represent_multi_choice(self, obj, values):
+        """Build a list of ``{value, title, css}`` for array/list choice fields."""
+        css_map = {}
+        field_value_css_func = getattr(obj, f"get_{self.choice_field_name}_css", None)
+        if field_value_css_func:
+            css_result = field_value_css_func()
+            if isinstance(css_result, dict):
+                css_map = css_result
+
+        choice_map = self.choices or {}
+        items = []
+        for item in values:
+            title = choice_map.get(item, item)
+            css = css_map.get(item, "default") if css_map else "default"
+            items.append({"value": item, "title": title, "css": css})
+        return items
+
+    def to_internal_value(self, data):
+        """Accept a raw choice value, list of values, or ``{"value": ...}``."""
+        if isinstance(data, dict):
+            if "value" not in data:
+                self.fail("invalid")
+            data = data["value"]
+
+        if data is None:
+            if self.allow_null:
+                return None
+            self.fail("null")
+
+        if isinstance(data, (list, tuple)):
+            return [self._coerce_single_choice(item) for item in data]
+
+        if isinstance(data, str) and data == "" and not self.required:
+            if self.allow_null:
+                return None
+            return data
+
+        return self._coerce_single_choice(data)
+
+    def _coerce_single_choice(self, data):
+        """Validate/coerce one choice value against the known choice map."""
+        if isinstance(data, dict) and "value" in data:
+            data = data["value"]
+
+        choice_map = self.choices
+        if choice_map:
+            if data in choice_map:
+                return data
+            for key in choice_map:
+                if str(key) == str(data):
+                    return key
+            self.fail("invalid_choice", input=data)
+        return data
+
+    default_error_messages = {
+        "invalid": "Invalid choice payload.",
+        "invalid_choice": '"{input}" is not a valid choice.',
+        "null": "This field may not be null.",
+    }
 
 
 class AutocompleteRelatedField(serializers.PrimaryKeyRelatedField):
