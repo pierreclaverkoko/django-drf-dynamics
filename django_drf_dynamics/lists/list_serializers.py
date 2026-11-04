@@ -29,7 +29,7 @@ class ListConfigurationSerializer(serializers.Serializer):
     title = serializers.CharField(allow_blank=True)
     description = serializers.CharField(allow_blank=True, default="")
     fields = serializers.ListField(child=serializers.CharField())
-    per_page = serializers.IntegerField(min_value=1, max_value=1000, default=25)
+    per_page = serializers.IntegerField(min_value=1, max_value=20, default=20)
     per_page_options = serializers.ListField(
         child=serializers.IntegerField(min_value=1, max_value=1000), default=[10, 25, 50, 100]
     )
