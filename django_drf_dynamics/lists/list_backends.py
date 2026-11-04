@@ -17,7 +17,7 @@ class BaseListBackend(ABC):
     """
 
     @abstractmethod
-    def get_list_data(self, view, request, config, page=1, per_page=25, search="", ordering=""):
+    def get_list_data(self, view, request, config, page=1, per_page=20, search="", ordering=""):
         """
         Get list data from the backend.
 
@@ -81,7 +81,7 @@ class DjangoOrmListBackend(BaseListBackend):
     ordering, and pagination support.
     """
 
-    def get_list_data(self, view, request, config, page=1, per_page=25, search="", ordering=""):
+    def get_list_data(self, view, request, config, page=1, per_page=20, search="", ordering=""):
         """
         Get list data from Django ORM QuerySet.
 
@@ -217,7 +217,7 @@ class ElasticsearchListBackend(BaseListBackend):
     Requires django-elasticsearch-dsl-drf to be installed.
     """
 
-    def get_list_data(self, view, request, config, page=1, per_page=25, search="", ordering=""):
+    def get_list_data(self, view, request, config, page=1, per_page=20, search="", ordering=""):
         """
         Get list data from Elasticsearch.
 
@@ -346,7 +346,7 @@ class WebSocketListBackend(BaseListBackend):
     Requires channels for WebSocket support.
     """
 
-    def get_list_data(self, view, request, config, page=1, per_page=25, search="", ordering=""):
+    def get_list_data(self, view, request, config, page=1, per_page=20, search="", ordering=""):
         """
         Get list data with WebSocket connection information.
 

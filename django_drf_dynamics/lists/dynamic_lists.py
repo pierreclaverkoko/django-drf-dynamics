@@ -88,7 +88,7 @@ class ListConfigurationMixin:
 
         return {
             "fields": fields,
-            "per_page": 25,
+            "per_page": 20,
             "enable_search": False,
             "search_fields": [],
             "enable_filters": hasattr(self, "filterset_metadata"),
@@ -112,7 +112,7 @@ class ListConfigurationMixin:
                 "title": config.get("title", config_name.replace("_", " ").title()),
                 "description": config.get("description", ""),
                 "fields_count": len(config.get("fields", [])),
-                "per_page": config.get("per_page", 25),
+                "per_page": config.get("per_page", 20),
                 "has_search": config.get("enable_search", False),
                 "has_filters": config.get("enable_filters", False),
                 "has_sorting": config.get("enable_sorting", False),
@@ -241,7 +241,7 @@ class DynamicListMixin(ListConfigurationMixin):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         # Override per_page from query params if provided
-        per_page = int(request.query_params.get("per_page", config.get("per_page", 25)))
+        per_page = int(request.query_params.get("per_page", config.get("per_page", 20)))
 
         # Generate cache key
         cache_params = {
@@ -303,8 +303,8 @@ class DynamicListMixin(ListConfigurationMixin):
             "config_name": config_name,
             "fields": self._get_field_metadata(config.get("fields", [])),
             "pagination": {
-                "per_page": config.get("per_page", 25),
-                "per_page_options": config.get("per_page_options", [10, 25, 50, 100]),
+                "per_page": config.get("per_page", 20),
+                "per_page_options": config.get("per_page_options", [10, 20]),
             },
             "search": {
                 "enabled": config.get("enable_search", False),
