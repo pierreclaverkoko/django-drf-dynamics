@@ -103,6 +103,20 @@ class AdvancedAutocompleteMixin:
         context = self.get_serializer_context() if hasattr(self, "get_serializer_context") else {}
         return serializer_class(data, many=many, context=context)
 
+    def get_requested_search_fields(self, request) -> list[str]:
+        """
+        Search fields for this request: the ``fields`` query param narrowed to ``autocomplete_fields``.
+
+        The param is user input; honouring it verbatim lets a caller search any model field or relation
+        (``password``, ``api_keys__secret_hash``...) and read the answer from the result set. Unknown names are
+        dropped, and an empty or fully rejected param falls back to the configured fields.
+        """
+        allowed = list(self.autocomplete_fields)
+        raw = request.query_params.get("fields", "")
+        requested = [name.strip() for name in raw.split(",") if name.strip()]
+        selected = [name for name in requested if name in allowed]
+        return selected or allowed
+
     @action(detail=False, methods=["get"])
     def advanced_autocomplete(self, request):
         """
@@ -140,7 +154,7 @@ class AdvancedAutocompleteMixin:
             int(request.query_params.get("limit", self.autocomplete_max_results)), self.autocomplete_max_results
         )
         enable_fuzzy = request.query_params.get("fuzzy", str(self.autocomplete_enable_fuzzy)).lower() == "true"
-        search_fields = request.query_params.get("fields", ",".join(self.autocomplete_fields)).split(",")
+        search_fields = self.get_requested_search_fields(request)
         boost_exact = float(request.query_params.get("boost_exact", self.autocomplete_exact_match_boost))
         boost_startswith = float(request.query_params.get("boost_startswith", self.autocomplete_startswith_boost))
 
@@ -181,10 +195,11 @@ class AdvancedAutocompleteMixin:
                 }
             )
 
-        except Exception as e:
-            logger.error(f"Autocomplete search error: {e}")
+        except Exception:
+            logger.exception("Autocomplete search error")
             return Response(
-                {"error": _("Search failed"), "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": _("Search failed"), "details": _("Unable to complete the search.")},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=False, methods=["get"])
@@ -330,7 +345,7 @@ class CachedAutocompleteMixin(AdvancedAutocompleteMixin):
         cache_params = {
             "limit": request.query_params.get("limit", self.autocomplete_max_results),
             "fuzzy": request.query_params.get("fuzzy", str(self.autocomplete_enable_fuzzy)),
-            "fields": request.query_params.get("fields", ",".join(self.autocomplete_fields)),
+            "fields": ",".join(self.get_requested_search_fields(request)),
         }
         cache_key = self.get_autocomplete_cache_key(query, **cache_params)
 
@@ -637,10 +652,11 @@ class NestedLookupMixin:
                 }
             )
 
-        except Exception as e:
-            logger.error(f"Nested lookup error: {e}")
+        except Exception:
+            logger.exception("Nested lookup error")
             return Response(
-                {"error": _("Nested lookup failed"), "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": _("Nested lookup failed"), "details": _("Unable to complete the lookup.")},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=False, methods=["get"])
